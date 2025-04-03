@@ -176,7 +176,7 @@ class BoxDrawer:
     image. Converts and saves resulting box points in a format that can
     be used for yolo-obb model training.
     """
-    def __init__(self, image_path: str, do_stop: threading.Event):
+    def __init__(self, image_path: str):
 
         # Check if image_path exists.
         if not Path(image_path).exists():
@@ -185,7 +185,7 @@ class BoxDrawer:
             sys.exit(1)
 
         # Used for threading and synchronization.
-        self.stop_event = do_stop
+        self.stop_event = threading.Event()
         self.control_lock = threading.RLock()
 
         self.window_name = ''
@@ -368,7 +368,7 @@ class BoxDrawer:
         self.active_box.height = max(self.active_box.height, min_d)
         self.active_box.width = max(self.active_box.width, min_d)
 
-    def draw_box(self, event: Optional[threading.Event] = None) -> None:
+    def draw_box(self) -> None:
         """
         Draw rectangular polygons on the image and handle user interactions.
         A while loop keeps the image updated with cv2.imshow and keeps key
@@ -376,6 +376,12 @@ class BoxDrawer:
         drawing.
         """
 
+        # Note: If use cv2.WINDOW_NORMAL, which displays the toolbar, then
+        # upon exit through on_close(), these errors occur:
+        #   QObject::killTimer: Timers cannot be stopped from another thread
+        #   QObject::~QObject: Timers cannot be stopped from another thread
+        # Solving this threading and Qt problem will allow needed zoom options
+        # for Windows implementation.
         # CV WINDOW SETUP
         self.window_name = "View and Edit OBB ('h' for help)"
         cv2.namedWindow(self.window_name,cv2.WINDOW_GUI_NORMAL,)
@@ -386,13 +392,6 @@ class BoxDrawer:
 
         cv2.setMouseCallback(self.window_name,
                              self.handle_mouse_events)
-
-        # Notes for scaled line thickness:
-        # OpenCV will draw lines that may be wider than specified.
-        #  Regardless, OBB borders will always be line-centered.
-        #  So, especially for larger images, keep in mind that the
-        #  interior half of a drawn line will be inside the actual OBB
-        #  dimensions when it is >=2 px thick.
 
         # Need image height and width for positioning boxes with the 'b' key.
         display_img_h, display_img_w = self.image_info['h&w']
@@ -1349,9 +1348,7 @@ if __name__ == "__main__":
     # Instantiate the drawing class with the default image.
     # Loading with a starting image is necessary for flow architecture.
     # Note: P0861__1024__0___1648.jpg from DOTA8 dataset is the start image.
-    stop_event = threading.Event()
-    box_drawer = BoxDrawer(image_path='images/readme_images/start_image.jpg',
-                           do_stop=stop_event)
+    box_drawer = BoxDrawer(image_path='images/readme_images/start_image.jpg')
 
     # Create the Tkinter YOLO control window as the main thread.
     app = YoloOBBControl(box_drawer)
@@ -1362,8 +1359,8 @@ if __name__ == "__main__":
     box_drawer.update_image_info()
 
     # Run the OpenCV window in a thread within the main Tk thread.
-    cv_thread = threading.Thread(target=box_drawer.draw_box,
-                                 args=(box_drawer.stop_event,))
+    cv_thread = threading.Thread(target=box_drawer.draw_box,)
+
     cv_thread.start()
 
     # Start the Tkinter main loop thread.
