@@ -122,6 +122,7 @@ The saved annotated image with 47 boxes.
 * When needing a box for a different object class, remember to change the class index in the YOLO OBB Control window before drawing the box.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
 * The OpenCV window manager on Ubuntu Linux allows you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. The 'h' key pops up a help window with keyboard shortcuts. Windows won't zoom with the mouse, but you can use the normal window bar right-click to maximize the image to fullscreen size.
+* You may want to zoom in for precise box positioning. If you do, know that the thickness of the box line may be a pixel wider than specified. Regardless, box borders will always be line-centered. Given this, keep in mind that the interior half of a drawn line will be inside the actual OBB dimensions when it is >=2 px thick. So, the box border is the middle of the line, not the edge.
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
 * If you are right-clicking to draw a box and nothing is happening, remember to first press the 'n' key, then right-click twice to define the opposite corners.
 * The terminal window provides feedback on save actions and errors. It may
