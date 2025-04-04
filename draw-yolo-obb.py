@@ -443,7 +443,7 @@ class BoxDrawer:
 
             self.set_keys()
 
-        cv2.destroyAllWindows()
+        cv2.destroyWindow(self.window_name)
 
     def set_keys(self) -> None:
         """
@@ -1218,6 +1218,8 @@ class YoloOBBControl(tk.Tk):
         main window 'X' button or Esc key press.
         Called from YoloInfoWindow __init__() window protocol and button.
         """
+
+        # Close in the reverse of the order they were opened.
         box_drawer.stop_event.set()  # close the draw_box while loop.
         cv_thread.join()
         self.destroy()
@@ -1360,12 +1362,9 @@ class Utility:
 
 if __name__ == "__main__":
 
-    # Instantiate the drawing class with the default image.
-    # Loading with a starting image is necessary for flow architecture.
-    # Note: P0861__1024__0___1648.jpg from DOTA8 dataset is the start image.
+    # Instantiate the drawing class with the default start image.
+    # Loading a starting image is necessary for flow architecture.
     box_drawer = BoxDrawer(image_path='readme_images/start_image.jpg')
-    cv_thread = threading.Thread(target=box_drawer.draw_box)
-    cv_thread.start()
 
     # Create the Tkinter YOLO control window as the main thread.
     app = YoloOBBControl()
@@ -1374,6 +1373,9 @@ if __name__ == "__main__":
     # Run update_image_info() after app Tk window is instantiated because
     #  it uses app.winfo_screenwidth() and app.winfo_screenheight().
     box_drawer.update_image_info()
+
+    cv_thread = threading.Thread(target=box_drawer.draw_box)
+    cv_thread.start()
 
     print(f'{Path(sys.modules["__main__"].__file__).stem} now running...')
     app.mainloop()
