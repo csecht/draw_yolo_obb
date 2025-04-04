@@ -466,7 +466,7 @@ class BoxDrawer:
         # Need image height and width for positioning boxes with the 'b' key.
         display_img_h, display_img_w = self.image_info['h&w']
 
-        # DEV: if change, needs to be a factor of 360 rotation.
+        # DEV: if changed, needs to be a factor of 360 rotation.
         angle_increment = 1
 
         # Note: key functions require the cv2 window to be in focus (click image).
@@ -636,7 +636,7 @@ class BoxDrawer:
 
         # Press 'h' to display help documentation in a pop-up window.
         if key == ord("h"):
-            self.show_help()
+            Utility.show_help()
 
     def check_boundaries(self, box: Optional[Box]) -> None:
         """
@@ -875,90 +875,6 @@ class BoxDrawer:
                     color=self.cv_font_color['black'],
                     lineType=cv2.LINE_AA)
 
-    @staticmethod
-    def show_help():
-        """
-        Show help documentation from the program docstring in a pop-up
-        window. Called from cv window with 'h' key.
-        Returns: None
-        """
-        help_win = tk.Toplevel()
-        help_win.title('Info and help tips')
-        help_win.wm_minsize(595, 200)  # May be platform dependent.
-        help_text = ScrolledText(master=help_win,
-                                  width=72, # 72 works for Linux and Windows.
-                                  height=25,
-                                  bg='dark slate grey',
-                                  fg='grey95',
-                                  relief='groove',
-                                  borderwidth=8,
-                                  padx=30, pady=30,
-                                  wrap=tk.WORD,
-                                  )
-        help_text.insert(tk.INSERT, __doc__)
-        help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
-
-    @staticmethod
-    def convert_to_obb_label_format(box: Box, im_size: tuple) -> str:
-        """
-        Correctly converts pixel coordinates to normalized YOLO OBB format while
-        preserving each box's exact geometry (aspect ratio, rotation) by normalizing
-        each dimension separately relative to image size.
-        Called from on_save(), passing one box at a time from a loop.
-
-        Args:
-            box: The Box object with pixel coordinates.
-            im_size: (image px height, image px width)
-
-        Returns: (string) The formatted YOLO OBB label string for the *box*;
-            class_index, x1_norm, y1_norm, ..., x4_norm, y4_norm
-        """
-        img_h, img_w = im_size
-        points = np.array(box.points)
-
-        # Calculate center in pixels
-        center_px = points.mean(axis=0)
-
-        # Calculate primary axis vector (width direction)
-        vec_w = points[1] - points[0]
-        width_px = np.linalg.norm(vec_w)
-
-        # Calculate perpendicular vector (height direction)
-        vec_h = points[3] - points[0]
-        height_px = np.linalg.norm(vec_h)
-
-        # Calculate rotation angle (critical for reconstruction)
-        angle_rad = np.arctan2(vec_w[1], vec_w[0])
-
-        # Convert to normalized coordinates
-        center_x_norm = center_px[0] / img_w
-        center_y_norm = center_px[1] / img_h
-        w_norm = width_px / img_w
-        h_norm = height_px / img_h
-
-        # Corners relative to center before rotation
-        half_w, half_h = w_norm / 2, h_norm / 2
-        corners = np.array([
-            [-half_w, -half_h],
-            [ half_w, -half_h],
-            [ half_w,  half_h],
-            [-half_w,  half_h]
-        ])
-
-        # Make and apply the rotation matrix shift.
-        rot = np.array([
-            [np.cos(angle_rad), -np.sin(angle_rad)],
-            [np.sin(angle_rad),  np.cos(angle_rad)]
-        ])
-        rotated_corners = corners @ rot.T
-
-        normalized_points = rotated_corners + [center_x_norm, center_y_norm]
-
-        # Convert numpy array of points to formatted strings, then return the label.
-        label_points = [f"{point:.6f}" for point in normalized_points.flatten()]
-
-        return str(box.class_index) + ' ' + ' '.join(label_points)
-
     def on_save(self):
         """
         Save to a text file boxes class index and point coordinates
@@ -990,7 +906,8 @@ class BoxDrawer:
             with open(f"results/{img_name}.txt", "w") as file:
                 for _box in self.boxes:
                     if len(_box.points) == 4:
-                        obb_label = self.convert_to_obb_label_format(box=_box, im_size=(img_h, img_w))
+                        obb_label = Utility.convert_to_obb_label_format(box=_box, im_size=(img_h,
+                                                                                      img_w))
                         file.write(f'{obb_label}\n')
 
                         pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
@@ -1227,50 +1144,6 @@ class YoloOBBControl(tk.Tk):
         # Return the labels and the image h,w for conversion by view_labels().
         return labels_to_convert, box_drawer.image_info['h&w'][:2]
 
-    @staticmethod
-    def convert_from_obb_label_format(points: list,
-                                      im_size: tuple) -> tuple:
-        """
-        Convert YOLO oriented bounding box (OBB)O labels to a format
-        suitable for viewing and further processing. This function
-        converts normalized OBB points to absolute pixel coordinates.
-        Called from view_labels().
-
-        Args:
-            points (list): Normalized coordinates for the four corners of the OBB.
-            im_size (tuple): Image pixel height and width (img_h, img_w).
-        Returns:
-             tuple (list, float):
-            - A list of tuples representing the absolute pixel coordinates of the
-              bounding box corners in the format [(x1, y1), (x2, y2)].
-            - The rotation angle in degrees for the OBB.
-        """
-
-        x1, y1, x2, y2, x3, y3, x4, y4 = points
-
-        img_h, img_w = im_size
-
-        # Calculate the center point, width, and height of the OBB, as
-        #  relative float values.
-        center_x = (x1 + x2 + x3 + x4) / 4
-        center_y = (y1 + y2 + y3 + y4) / 4
-        width = np.hypot(x2 - x1, y2 - y1)
-        height = np.hypot(x3 - x2, y3 - y2)
-
-        # Calculate the angle of rotation, theta. May be negative, so use atan2.
-        # This will give the angle in radians, which is converted to degrees for
-        # compatibility with cv2.getRotationMatrix2D in Box.update_properties().
-        theta = np.degrees(np.arctan2(y2 - y1, x2 - x1))
-
-        # Convert normalized coordinates to absolute pixel coordinates for display.
-        # Need to use round() for best accuracy in pixel coordinates.
-        x_abs, y_abs = round(center_x * img_w), round(center_y * img_h)
-        w_abs, h_abs = round(width * img_w), round(height * img_h)
-
-        # Return format: [(x1, y1), (x2, y2)] and rotation, for a Box object.
-        return [(round(x_abs - w_abs * 0.5), round(y_abs - h_abs * 0.5)),
-                (round(x_abs + w_abs * 0.5), round(y_abs + h_abs * 0.5))], theta
-
     def view_labels(self, label_data: tuple):
         """
         Provides Box formatting and BoxDrawer display of YOLO object
@@ -1306,7 +1179,10 @@ class YoloOBBControl(tk.Tk):
                         angle = 0
                     elif len(data) == 9:  # OBB format
                         class_index, *points = data
-                        points, angle = self.convert_from_obb_label_format(points, (img_h, img_w))
+                        points, angle = Utility.convert_from_obb_label_format(
+                            pts=points,
+                            im_size=(img_h, img_w)
+                        )
                     else:
                         raise ValueError
 
@@ -1347,6 +1223,139 @@ class YoloOBBControl(tk.Tk):
         self.destroy()
         print('User quit the program.')
         sys.exit(0)  # just in case
+
+
+class Utility:
+    """
+    A class to provide utility functions for the program.
+    """
+
+    @staticmethod
+    def show_help():
+        """
+        Show help documentation from the program docstring in a pop-up
+        window. Called from cv window with 'h' key.
+        Returns: None
+        """
+        help_win = tk.Toplevel()
+        help_win.title('Info and help tips')
+        help_win.wm_minsize(595, 200)  # May be platform dependent.
+        help_text = ScrolledText(master=help_win,
+                                  width=72, # 72 works for Linux and Windows.
+                                  height=25,
+                                  bg='dark slate grey',
+                                  fg='grey95',
+                                  relief='groove',
+                                  borderwidth=8,
+                                  padx=30, pady=30,
+                                  wrap=tk.WORD,
+                                  )
+        help_text.insert(tk.INSERT, __doc__)
+        help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
+
+    @staticmethod
+    def convert_to_obb_label_format(box: Box, im_size: tuple) -> str:
+        """
+        Correctly converts pixel coordinates to normalized YOLO OBB format while
+        preserving each box's exact geometry (aspect ratio, rotation) by normalizing
+        each dimension separately relative to image size.
+        Called from on_save(), passing one box at a time from a loop.
+
+        Args:
+            box: The Box object with pixel coordinates.
+            im_size: (image px height, image px width)
+
+        Returns: (string) The formatted YOLO OBB label string for the *box*;
+            class_index, x1_norm, y1_norm, ..., x4_norm, y4_norm
+        """
+        img_h, img_w = im_size
+        points = np.array(box.points)
+
+        # Calculate center in pixels
+        center_px = points.mean(axis=0)
+
+        # Calculate primary axis vector (width direction)
+        vec_w = points[1] - points[0]
+        width_px = np.linalg.norm(vec_w)
+
+        # Calculate perpendicular vector (height direction)
+        vec_h = points[3] - points[0]
+        height_px = np.linalg.norm(vec_h)
+
+        # Calculate rotation angle (critical for reconstruction)
+        angle_rad = np.arctan2(vec_w[1], vec_w[0])
+
+        # Convert to normalized coordinates
+        center_x_norm = center_px[0] / img_w
+        center_y_norm = center_px[1] / img_h
+        w_norm = width_px / img_w
+        h_norm = height_px / img_h
+
+        # Corners relative to center before rotation
+        half_w, half_h = w_norm / 2, h_norm / 2
+        corners = np.array([
+            [-half_w, -half_h],
+            [ half_w, -half_h],
+            [ half_w,  half_h],
+            [-half_w,  half_h]
+        ])
+
+        # Make and apply the rotation matrix shift.
+        rot = np.array([
+            [np.cos(angle_rad), -np.sin(angle_rad)],
+            [np.sin(angle_rad),  np.cos(angle_rad)]
+        ])
+        rotated_corners = corners @ rot.T
+
+        normalized_points = rotated_corners + [center_x_norm, center_y_norm]
+
+        # Convert numpy array of points to formatted strings, then return the label.
+        label_points = [f"{point:.6f}" for point in normalized_points.flatten()]
+
+        return str(box.class_index) + ' ' + ' '.join(label_points)
+
+    @staticmethod
+    def convert_from_obb_label_format(pts: list, im_size: tuple) -> tuple:
+        """
+        Convert YOLO oriented bounding box (OBB)O labels to a format
+        suitable for viewing and further processing. This function
+        converts normalized OBB points to absolute pixel coordinates.
+        Called from view_labels().
+
+        Args:
+            pts (list): Normalized coordinates for the four corners of the OBB.
+            im_size (tuple): Image pixel height and width (img_h, img_w).
+        Returns:
+             tuple (list, float):
+            - A list of tuples representing the absolute pixel coordinates of the
+              bounding box corners in the format [(x1, y1), (x2, y2)].
+            - The rotation angle in degrees for the OBB.
+        """
+
+        x1, y1, x2, y2, x3, y3, x4, y4 = pts
+
+        img_h, img_w = im_size
+
+        # Calculate the center point, width, and height of the OBB, as
+        #  relative float values.
+        center_x = (x1 + x2 + x3 + x4) / 4
+        center_y = (y1 + y2 + y3 + y4) / 4
+        width = np.hypot(x2 - x1, y2 - y1)
+        height = np.hypot(x3 - x2, y3 - y2)
+
+        # Calculate the angle of rotation, theta. May be negative, so use atan2.
+        # This will give the angle in radians, which is converted to degrees for
+        # compatibility with cv2.getRotationMatrix2D in Box.update_properties().
+        theta = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+
+        # Convert normalized coordinates to absolute pixel coordinates for display.
+        # Need to use round() for best accuracy in pixel coordinates.
+        x_abs, y_abs = round(center_x * img_w), round(center_y * img_h)
+        w_abs, h_abs = round(width * img_w), round(height * img_h)
+
+        # Return format: [(x1, y1), (x2, y2)] and rotation, for a Box object.
+        return [(round(x_abs - w_abs * 0.5), round(y_abs - h_abs * 0.5)),
+                (round(x_abs + w_abs * 0.5), round(y_abs + h_abs * 0.5))], theta
 
 
 if __name__ == "__main__":
