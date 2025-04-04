@@ -2,9 +2,9 @@
 <br/>
 <br/>
 
-|            View existing object detection labels            |             Edit and export as YOLO OBB labels             |
-|:-----------------------------------------------------------:|:----------------------------------------------------------:|
-| <img src="images/readme_images/oyster_boxes.png" width=350> | <img src="images/readme_images/oysters_obb.png" width=350> |
+|        View existing object detection labels         |         Edit and export as YOLO OBB labels          |
+|:----------------------------------------------------:|:---------------------------------------------------:|
+| <img src="readme_images/oyster_boxes.png" width=350> | <img src="readme_images/oysters_obb.png" width=350> |
 
 <p align="center">
 Draw boxes from scratch or import YOLO object detection labels, then edit and export as labels for Ultralytics yolo-obb models.
@@ -106,11 +106,11 @@ Key assignments are based on the QWERTY keyboard layout. The rationale is that k
 
 ### Screenshots:
 <p align="center">
-<img src="images/readme_images/control_window_saved.png">
+<img src="readme_images/control_window_saved.png">
 <p align="center">
 The program control window.
 <p align="center">
-<img src="images/readme_images/oyster_obb_result.jpg" width=400>
+<img src="readme_images/oyster_obb_result.jpg" width=400>
 <p align="center">
 The saved annotated image with 47 boxes.
 </p>
