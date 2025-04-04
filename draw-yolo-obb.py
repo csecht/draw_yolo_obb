@@ -283,24 +283,25 @@ class BoxDrawer:
         Path(self.labels_folder).mkdir(parents=True, exist_ok=True)
 
         labels_file = Path(img_path).stem + '.txt'
-        if labels_file in self.labels_files:
-            convert_now = messagebox.askyesno(
-                parent=app,
-                title='Convert label data?',
-                detail=f'The image "{Path(img_path).name}"'
-                       f' has a labels file in {self.labels_folder}.\n'
-                       f'"Yes" draws those boxes on the image.\n')
-            if convert_now:
-                # Load the existing label data and draw boxes on the image.
-                labels_path = f'{self.labels_folder}/{labels_file}'
-                try:
-                    labels_to_view = app.get_labels(labels_path=labels_path)
-                    if labels_to_view:
-                        app.view_labels(label_data=labels_to_view)
-                except FileNotFoundError as e:
-                    print('DEV: From look_for_labels(),'
-                          f' no labels file found for {img_path}.\n'
-                          f'Error: {e}')
+        with self.control_lock:
+            if labels_file in self.labels_files:
+                convert_now = messagebox.askyesno(
+                    parent=app,
+                    title='Convert label data?',
+                    detail=f'The image "{Path(img_path).name}"'
+                           f' has a labels file in {self.labels_folder}.\n'
+                           f'"Yes" draws those boxes on the image.\n')
+                if convert_now:
+                    # Load the existing label data and draw boxes on the image.
+                    labels_path = f'{self.labels_folder}/{labels_file}'
+                    try:
+                        labels_to_view = app.get_labels(labels_path=labels_path)
+                        if labels_to_view:
+                            app.view_labels(label_data=labels_to_view)
+                    except FileNotFoundError as e:
+                        print('DEV: From look_for_labels(),'
+                              f' no labels file found for {img_path}.\n'
+                              f'Error: {e}')
 
     def update_image_info(self) -> None:
         """
@@ -376,12 +377,15 @@ class BoxDrawer:
         drawing.
         """
 
-        # Note: If use cv2.WINDOW_NORMAL, which displays the toolbar, then
+        # Note: If you use cv2.WINDOW_NORMAL, which displays the toolbar, then
         # upon exit through on_close(), these errors occur:
         #   QObject::killTimer: Timers cannot be stopped from another thread
         #   QObject::~QObject: Timers cannot be stopped from another thread
+        # cv2.WINDOW_GUI_NORMAL does not display the toolbar, but does not
+        #  raise errors on exit.
         # Solving this threading and Qt problem will allow needed zoom options
         # for Windows implementation.
+
         # CV WINDOW SETUP
         self.window_name = "View and Edit OBB ('h' for help)"
         cv2.namedWindow(self.window_name,cv2.WINDOW_GUI_NORMAL,)
@@ -393,23 +397,6 @@ class BoxDrawer:
         cv2.setMouseCallback(self.window_name,
                              self.handle_mouse_events)
 
-        # Need image height and width for positioning boxes with the 'b' key.
-        display_img_h, display_img_w = self.image_info['h&w']
-
-        # Needs to be a factor of 360 rotation and of 'b' key rotation
-        # angle limit.
-        angle_increment = 1
-
-        if MY_OS == 'lin':  # Linux, waitKey() returns 0-255 for keys, so use ord()
-            left_arrow = 81
-            right_arrow = 83
-            up_arrow = 82
-            down_arrow = 84
-        else:  # 'win', with waitKeyEx(), for Windows special keys (on HP Pavilion)
-            left_arrow = 2424832  # VK_LEFT, 0x25
-            right_arrow = 2555904 # VK_RIGHT, 0x27
-            up_arrow = 2490368  # VK_UP, 0x26
-            down_arrow = 2621440  # VK_DOWN, 0x28
 
         # BOX DRAWING and KEYBOARD ACTION LOOP
         # The loop provides live drawing updates as long as the threading.Event
@@ -454,180 +441,202 @@ class BoxDrawer:
 
             cv2.imshow(self.window_name, display_image)
 
-            if MY_OS == 'lin':
-                key = cv2.waitKey(1) & 0xFF  # Linux, restricts keycodes to 0-255
-            else: # 'win':
-                key = cv2.waitKeyEx(1)  # Windows, allows for special keys to be captured
+            self.set_keys()
 
-            # Note: key functions require the cv2 window to be in focus (click image).
-            # Note: current_class_index is set in YoloOBBControl.set_class_index().
+        cv2.destroyAllWindows()
 
-            # Press 'n' to start a new box when placing a box with right button clicks.
-            if key == ord("n"):
+    def set_keys(self) -> None:
+        """
+        Define all the key events for manipulating the boxes in the CV window.
+        Called from draw_box() while the image is displayed.
+        """
+        if MY_OS == 'lin':  # Linux, waitKey() returns 0-255 for keys, so use ord()
+            key = cv2.waitKey(1) & 0xFF  # Linux, restricts keycodes to 0-255
+            left_arrow = 81
+            right_arrow = 83
+            up_arrow = 82
+            down_arrow = 84
+        else:  # 'win', with waitKeyEx(), for Windows special keys (on HP Pavilion)
+            key = cv2.waitKeyEx(1)
+            left_arrow = 2424832  # VK_LEFT, 0x25
+            right_arrow = 2555904 # VK_RIGHT, 0x27
+            up_arrow = 2490368  # VK_UP, 0x26
+            down_arrow = 2621440  # VK_DOWN, 0x28
+
+        # Need image height and width for positioning boxes with the 'b' key.
+        display_img_h, display_img_w = self.image_info['h&w']
+
+        # DEV: if change, needs to be a factor of 360 rotation.
+        angle_increment = 1
+
+        # Note: key functions require the cv2 window to be in focus (click image).
+        # Note: current_class_index is set in YoloOBBControl.set_class_index().
+
+        # Press 'n' to start a new box when placing a box with right button clicks.
+        if key == ord("n"):
+            self.active_box = None
+            self.boxes.append(Box(class_index=self.current_class_index))
+            self.boxes[-1].is_active = True
+            for _box in self.boxes[:-1]:
+                _box.is_active = False
+
+        # Auto-draw a new box near the top-left corner of the image.
+        #  Pressing 'b' multiple times will overlay each new box.
+        #  Therefore, need to offset each new box so that user can
+        #  see that there are multiple boxes.
+        if key == ord("b"):
+            if self.active_box:
+                self.active_box.is_active = False
+            # Provide a progressive offset for each new box.
+            self.b_box_counter += 1
+            x = round(display_img_w * 0.03) + (self.b_box_counter * 5)
+            y = round(display_img_h * 0.03) + (self.b_box_counter * 5)
+            self.boxes.append(Box(class_index=self.current_class_index,
+                                  points=[(x, y), (x + 150, y + 150)],
+                                  rotation_angle=0))
+            self.boxes[-1].update_properties()
+            self.boxes[-1].update_points()
+            self.boxes[-1].is_active = True
+            self.active_box = self.boxes[-1]
+            for _box in self.boxes[:-1]:
+                _box.is_active = False
+
+        # Press 'c' to clone (copy and paste) the active box.
+        if key == ord("c"):
+            if self.active_box and len(self.active_box.points) == 4:
+
+                # Need to shift the cloned box to avoid overlap.
+                offset_points = self.active_box.points.copy()
+                for i, (x, y) in enumerate(offset_points):
+                    offset_points[i] = (x + 10, y + 10)
+
+                # Note that here four points are used, not two as
+                # with the 'b' or 'n' keys. Rotated points will be
+                # transformed in the update_properties() method to
+                # preserve height and width.
+                cloned_box = Box(class_index=self.active_box.class_index,
+                                 points=offset_points,
+                                 rotation_angle=self.active_box.rotation_angle)
+                self.boxes.append(cloned_box)
+                cloned_box.is_active = True
+                self.active_box = cloned_box
+                for _box in self.boxes[:-1]:
+                    _box.is_active = False
+                cloned_box.update_properties()
+                cloned_box.update_points()
+
+        # Press 'r' to remove the active box.
+        if key == ord("r"):
+            if self.active_box:
+                self.boxes = [box for box in self.boxes if box != self.active_box]
                 self.active_box = None
-                self.boxes.append(Box(class_index=self.current_class_index))
-                self.boxes[-1].is_active = True
-                for _box in self.boxes[:-1]:
-                    _box.is_active = False
 
-            # Auto-draw a new box near the top-left corner of the image.
-            #  Pressing 'b' multiple times will overlay each new box.
-            #  Therefore, need to offset each new box so that user can
-            #  see that there are multiple boxes.
-            if key == ord("b"):
-                if self.active_box:
-                    self.active_box.is_active = False
-                # Provide a progressive offset for each new box.
-                self.b_box_counter += 1
-                x = round(display_img_w * 0.03) + (self.b_box_counter * 5)
-                y = round(display_img_h * 0.03) + (self.b_box_counter * 5)
-                self.boxes.append(Box(class_index=self.current_class_index,
-                                      points=[(x, y), (x + 150, y + 150)],
-                                      rotation_angle=0))
-                self.boxes[-1].update_properties()
-                self.boxes[-1].update_points()
-                self.boxes[-1].is_active = True
-                self.active_box = self.boxes[-1]
-                for _box in self.boxes[:-1]:
-                    _box.is_active = False
+        # Rotate active box left (counter-clockwise), apply limit.
+        if key == left_arrow:
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.rotation_angle -= angle_increment
+                if self.active_box.rotation_angle <= -180:
+                    self.active_box.rotation_angle = -180
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Press 'c' to clone (copy and paste) the active box.
-            if key == ord("c"):
-                if self.active_box and len(self.active_box.points) == 4:
+        # Rotate active box right (clockwise), apply limit.
+        if key == right_arrow:
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.rotation_angle += angle_increment
+                if self.active_box.rotation_angle >= 180:
+                    self.active_box.rotation_angle = 180
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-                    # Need to shift the cloned box to avoid overlap.
-                    offset_points = self.active_box.points.copy()
-                    for i, (x, y) in enumerate(offset_points):
-                        offset_points[i] = (x + 10, y + 10)
+        # Simultaneously increase height and width.
+        if key == up_arrow:
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.height += 1
+                self.active_box.width += 1
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-                    # Note that here four points are used, not two as
-                    # with the 'b' or 'n' keys. Rotated points will be
-                    # transformed in the update_properties() method to
-                    # preserve height and width.
-                    cloned_box = Box(class_index=self.active_box.class_index,
-                                     points=offset_points,
-                                     rotation_angle=self.active_box.rotation_angle)
-                    self.boxes.append(cloned_box)
-                    cloned_box.is_active = True
-                    self.active_box = cloned_box
-                    for _box in self.boxes[:-1]:
-                        _box.is_active = False
-                    cloned_box.update_properties()
-                    cloned_box.update_points()
+        # Simultaneously decrease height and width.
+        if key == down_arrow:
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.height = max(1, self.active_box.height - 1)
+                self.active_box.width = max(1, self.active_box.width - 1)
+                self.set_min_hw(self.min_dim)
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Press 'r' to remove the active box.
-            if key == ord("r"):
-                if self.active_box:
-                    self.boxes = [box for box in self.boxes if box != self.active_box]
-                    self.active_box = None
+        # The following layout of keys for manipulating the active box
+        #  is based on the QWERTY keyboard layout.
+        #  The rationale is that keys' relative positions infer their
+        #  action, similar to the spatial layout of the
+        #  arrow keys cluster.
 
-            # Rotate active box left (counter-clockwise), apply limit.
-            if key == left_arrow:
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.rotation_angle -= angle_increment
-                    if self.active_box.rotation_angle <= -180:
-                        self.active_box.rotation_angle = -180
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Move active box up
+        if key == ord("i"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.center = (self.active_box.center[0],
+                                          self.active_box.center[1] - 1)
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Rotate active box right (clockwise), apply limit.
-            if key == right_arrow:
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.rotation_angle += angle_increment
-                    if self.active_box.rotation_angle >= 180:
-                        self.active_box.rotation_angle = 180
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Move active box down
+        if key == ord("k"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.center = (self.active_box.center[0],
+                                          self.active_box.center[1] + 1)
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Simultaneously increase height and width.
-            if key == up_arrow:
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.height += 1
-                    self.active_box.width += 1
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Move active box left
+        if key == ord("j"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.center = (self.active_box.center[0] - 1,
+                                          self.active_box.center[1])
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Simultaneously decrease height and width.
-            if key == down_arrow:
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.height = max(1, self.active_box.height - 1)
-                    self.active_box.width = max(1, self.active_box.width - 1)
-                    self.set_min_hw(self.min_dim)
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Move active box right.
+        if key == ord("l"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.center = (self.active_box.center[0] + 1,
+                                          self.active_box.center[1])
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # The following layout of keys for manipulating the active box
-            #  is based on the QWERTY keyboard layout.
-            #  The rationale is that keys' relative positions infer their
-            #  action, similar to the spatial layout of the
-            #  arrow keys cluster.
+        # Increase the height of the active box.
+        if key == ord("e"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.height += 1
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Move active box up
-            if key == ord("i"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.center = (self.active_box.center[0],
-                                             self.active_box.center[1] - 1)
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Decrease the height of the active box.
+        if key == ord("d"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.height = max(1, self.active_box.height - 1)
+                self.set_min_hw(self.min_dim)
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Move active box down
-            if key == ord("k"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.center = (self.active_box.center[0],
-                                             self.active_box.center[1] + 1)
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Increase the width of the active box.
+        if key == ord("f"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.width += 1
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Move active box left
-            if key == ord("j"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.center = (self.active_box.center[0] - 1,
-                                             self.active_box.center[1])
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
+        # Decrease the width of the active box
+        if key == ord("s"):
+            if self.active_box and len(self.active_box.points) == 4:
+                self.active_box.width = max(1, self.active_box.width - 1)
+                self.set_min_hw(self.min_dim)
+                self.active_box.update_points()
+                self.check_boundaries(self.active_box)
 
-            # Move active box right.
-            if key == ord("l"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.center = (self.active_box.center[0] + 1,
-                                             self.active_box.center[1])
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
-
-            # Increase the height of the active box.
-            if key == ord("e"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.height += 1
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
-
-            # Decrease the height of the active box.
-            if key == ord("d"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.height = max(1, self.active_box.height - 1)
-                    self.set_min_hw(self.min_dim)
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
-
-            # Increase the width of the active box.
-            if key == ord("f"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.width += 1
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
-
-            # Decrease the width of the active box
-            if key == ord("s"):
-                if self.active_box and len(self.active_box.points) == 4:
-                    self.active_box.width = max(1, self.active_box.width - 1)
-                    self.set_min_hw(self.min_dim)
-                    self.active_box.update_points()
-                    self.check_boundaries(self.active_box)
-
-            # Press 'h' to display help documentation in a pop-up window.
-            if key == ord("h"):
-                # print(__doc__)
-                self.show_help()
+        # Press 'h' to display help documentation in a pop-up window.
+        if key == ord("h"):
+            self.show_help()
 
     def check_boundaries(self, box: Optional[Box]) -> None:
         """
@@ -956,51 +965,52 @@ class BoxDrawer:
         in YOLO OBB format. Also save the drawn image as a jpeg file.
         Called from the 'Save' button in YoloOBBControl.config_control_window()
         """
-        # Each time 'n' is pressed, an empty points list is appended to the
-        #  boxes list before any box is drawn. Multiple 'n' presses
-        #  will append multiple empty lists to it. So, need to remove all
-        #  empty elements for an accurate count of drawn boxes.
-        self.boxes = [box for box in self.boxes if len(box.points) == 4]
+        with self.control_lock:
+            # Each time 'n' is pressed, an empty points list is appended to the
+            #  boxes list before any box is drawn. Multiple 'n' presses
+            #  will append multiple empty lists to it. So, need to remove all
+            #  empty elements for an accurate count of drawn boxes.
+            self.boxes = [box for box in self.boxes if len(box.points) == 4]
 
-        if not self.boxes:
-            app.info_txt.set('No boxes to save.')
-            # print('No boxes to save.')
-            return
+            if not self.boxes:
+                app.info_txt.set('No boxes to save.')
+                # print('No boxes to save.')
+                return
 
-        # Create the results directory if it doesn't exist.
-        Path('results').mkdir(parents=True, exist_ok=True)
+            # Create the results directory if it doesn't exist.
+            Path('results').mkdir(parents=True, exist_ok=True)
 
-        result_image = self.image_array.copy()
-        img_name = self.image_info['short name']
-        img_h, img_w = self.image_info['h&w']
+            result_image = self.image_array.copy()
+            img_name = self.image_info['short name']
+            img_h, img_w = self.image_info['h&w']
 
-        # Box.points are in absolute coordinates. So, need to convert pixels to
-        #  normalized coordinates (0.0 to 1.0).
-        # Write the data to a text file as yolo-obb labels and draw boxes on the image.
-        with open(f"results/{img_name}.txt", "w") as file:
-            for _box in self.boxes:
-                if len(_box.points) == 4:
-                    obb_label = self.convert_to_obb_label_format(box=_box, im_size=(img_h, img_w))
-                    file.write(f'{obb_label}\n')
+            # Box.points are in absolute coordinates. So, need to convert pixels to
+            #  normalized coordinates (0.0 to 1.0).
+            # Write the data to a text file as yolo-obb labels and draw boxes on the image.
+            with open(f"results/{img_name}.txt", "w") as file:
+                for _box in self.boxes:
+                    if len(_box.points) == 4:
+                        obb_label = self.convert_to_obb_label_format(box=_box, im_size=(img_h, img_w))
+                        file.write(f'{obb_label}\n')
 
-                    pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
-                    cv2.polylines(result_image,[pts],
-                                  isClosed=True,
-                                  color=self.cv_font_color['orange'],
-                                  thickness=self.image_info['line thickness'])
-                    cv2.circle(result_image,
-                               center=_box.points[2],
-                               radius=self.get_circle_radius(),
-                               color=self.cv_font_color['orange'],
-                               thickness=-1)
-                    self.put_text_class_index(result_image,
-                                              class_idx=str(_box.class_index),
-                                              box=_box)
+                        pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
+                        cv2.polylines(result_image,[pts],
+                                      isClosed=True,
+                                      color=self.cv_font_color['orange'],
+                                      thickness=self.image_info['line thickness'])
+                        cv2.circle(result_image,
+                                   center=_box.points[2],
+                                   radius=self.get_circle_radius(),
+                                   color=self.cv_font_color['orange'],
+                                   thickness=-1)
+                        self.put_text_class_index(result_image,
+                                                  class_idx=str(_box.class_index),
+                                                  box=_box)
 
-        cv2.imwrite(f"results/{img_name}_result.jpg", result_image)
+            cv2.imwrite(f"results/{img_name}_result.jpg", result_image)
 
-        app.info_txt.set(f'{len(self.boxes)} YOLO OBB labels, and the annotated image,\n'
-                         ' were saved to the results folder.')
+            app.info_txt.set(f'{len(self.boxes)} YOLO OBB labels, and the annotated image,\n'
+                             ' were saved to the results folder.')
         # Need to provide a session record of save actions for the user.
         print(f'{len(self.boxes)} YOLO OBB labels, and their annotated image,'
               ' were saved to the results folder.')
@@ -1016,10 +1026,8 @@ class YoloOBBControl(tk.Tk):
     training image. From there the user can adjust size and rotation of
     the boxes and save the results for YOLO OBB model training.
     """
-    def __init__(self, drawing_class):
+    def __init__(self):
         super().__init__()
-
-        self.box_drawer = drawing_class
 
         self.entry_label = tk.Label()
         self.class_entry = tk.Entry()
@@ -1055,7 +1063,6 @@ class YoloOBBControl(tk.Tk):
         self.line_thickness_label.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
-
         self.title('YOLO OBB Control')
         self.attributes("-topmost", True)
         self.geometry('390x255+100+400')  # width x height + x_offset + y_offset
@@ -1073,7 +1080,7 @@ class YoloOBBControl(tk.Tk):
 
         # This text will be replaced with save metrics when the user saves.
         self.info_txt.set(f"A yolo labels file in the"
-                          f" {self.box_drawer.labels_folder} folder\n"
+                          f" {box_drawer.labels_folder} folder\n"
                  'can draw those boxes on its corresponding image.')
         self.info_label.config(
             textvariable=self.info_txt,
@@ -1151,7 +1158,7 @@ class YoloOBBControl(tk.Tk):
         #  negative values and letters may be showing in the focused Entry field.
         try:
             class_index = abs(int(self.class_entry.get()))
-            self.box_drawer.current_class_index = class_index
+            box_drawer.current_class_index = class_index
         except ValueError:
             messagebox.showerror(title='Invalid class index',
                                  detail='Please enter an integer value.')
@@ -1162,13 +1169,13 @@ class YoloOBBControl(tk.Tk):
         """
         Increase the line thickness of the drawn boxes.
         """
-        self.box_drawer.image_info['line thickness'] += 1
+        box_drawer.image_info['line thickness'] += 1
 
     def decrease_line_thickness(self):
         """
         Decrease the line thickness of the drawn boxes.
         """
-        self.box_drawer.image_info['line thickness'] = max(1, self.box_drawer.image_info['line thickness'] - 1)
+        box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
 
     def get_labels(self, labels_path: str) -> Union[tuple[list, tuple], None]:
         """
@@ -1281,7 +1288,7 @@ class YoloOBBControl(tk.Tk):
         """
 
         # Clear existing boxes before adding new ones.
-        self.box_drawer.boxes.clear()
+        box_drawer.boxes.clear()
         labels_to_view, (img_h, img_w) = label_data
 
         # Check format of the first line of the labels file to determine
@@ -1307,11 +1314,11 @@ class YoloOBBControl(tk.Tk):
                                   points=points,
                                   rotation_angle=angle)
                     new_box.is_active = False
-                    self.box_drawer.boxes.append(new_box)
-                    self.box_drawer.active_box = new_box
+                    box_drawer.boxes.append(new_box)
+                    box_drawer.active_box = new_box
                     new_box.update_properties()
                     new_box.update_points()
-                    self.box_drawer.check_boundaries(new_box)
+                    box_drawer.check_boundaries(new_box)
 
                 except ValueError:
                     messagebox.showerror(
@@ -1322,10 +1329,10 @@ class YoloOBBControl(tk.Tk):
                     )
                     return
 
-        if self.box_drawer.boxes:
+        if box_drawer.boxes:
             messagebox.showinfo(
                 title='Conversion complete',
-                detail=f'{len(self.box_drawer.boxes)} OBB boxes were created\n'
+                detail=f'{len(box_drawer.boxes)} OBB boxes were created\n'
                        ' from the YOLO labels file.'
             )
 
@@ -1337,10 +1344,9 @@ class YoloOBBControl(tk.Tk):
         """
         box_drawer.stop_event.set()  # close the draw_box while loop.
         cv_thread.join()
-        cv2.destroyAllWindows()
         self.destroy()
         print('User quit the program.')
-        sys.exit(0)
+        sys.exit(0)  # just in case
 
 
 if __name__ == "__main__":
@@ -1348,21 +1354,17 @@ if __name__ == "__main__":
     # Instantiate the drawing class with the default image.
     # Loading with a starting image is necessary for flow architecture.
     # Note: P0861__1024__0___1648.jpg from DOTA8 dataset is the start image.
-    box_drawer = BoxDrawer(image_path='images/readme_images/start_image.jpg')
-
-    # Create the Tkinter YOLO control window as the main thread.
-    app = YoloOBBControl(box_drawer)
-    app.config_control_window()
-
-    # Run update_image_info() after app Tk window is initialized because
-    #  it uses Tk winfo_screenwidth() and winfo_screenheight().
-    box_drawer.update_image_info()
-
-    # Run the OpenCV window in a thread within the main Tk thread.
-    cv_thread = threading.Thread(target=box_drawer.draw_box,)
-
+    box_drawer = BoxDrawer(image_path='readme_images/start_image.jpg')
+    cv_thread = threading.Thread(target=box_drawer.draw_box)
     cv_thread.start()
 
-    # Start the Tkinter main loop thread.
+    # Create the Tkinter YOLO control window as the main thread.
+    app = YoloOBBControl()
+    app.config_control_window()
+
+    # Run update_image_info() after app Tk window is instantiated because
+    #  it uses app.winfo_screenwidth() and app.winfo_screenheight().
+    box_drawer.update_image_info()
+
     print(f'{Path(sys.modules["__main__"].__file__).stem} now running...')
     app.mainloop()
