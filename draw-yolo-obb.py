@@ -1350,7 +1350,7 @@ if __name__ == "__main__":
     # Loading with a starting image is necessary for flow architecture.
     # Note: P0861__1024__0___1648.jpg from DOTA8 dataset is the start image.
     stop_event = threading.Event()
-    box_drawer = BoxDrawer(image_path='readme_images/start_image.jpg',
+    box_drawer = BoxDrawer(image_path='images/start_image.jpg',
                            do_stop=stop_event)
 
     # Create the Tkinter YOLO control window as the main thread.
