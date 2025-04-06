@@ -4,7 +4,7 @@
 
 |            View existing object detection labels            |             Edit and export as YOLO OBB labels             |
 |:-----------------------------------------------------------:|:----------------------------------------------------------:|
-| <img src="images/readme_images/oyster_boxes.png" width=350> | <img src="images/readme_images/oysters_obb.png" width=350> |
+| <img src="readme_images/oyster_boxes.png" width=350> | <img src="readme_images/oysters_obb.png" width=350> |
 
 <p align="center">
 Draw boxes from scratch or import YOLO object detection labels, then edit and export as labels for Ultralytics yolo-obb models.
@@ -26,20 +26,17 @@ This Python3 script draws oriented bounding boxes (rotated bounding boxes, OBB) 
 The script is executed from the command line on Linux and Windows platforms.
 
 ### Requirements:
-`draw-yolo-obb.py` requires the OpenCV and NumPy packages. Tkinter (Tk/Tcl) is also needed, but is most likely already included in your Python distribution. The required packages can be installed using pip. Installing opencv-python also installs the compatible version of NumPy. It is recommended to use a virtual environment to avoid version conflicts with other packages. While optional, the commands for that are included below for using the `venv` module and a new virtual environment named `cvvenv`. You can name the environment anything you like. 
+`draw-yolo-obb.py` requires the OpenCV and NumPy packages. Tkinter (Tk/Tcl) is also needed, but is most likely already included in your Python distribution. The required packages can be installed using pip:
 ```bash
-python3 -m venv cvvenv
-source cvvenv/bin/activate
-python3 -m pip install --update pip
-python3 -m pip install opencv-python
+pip install --upgrade pip
+pip install opencv-python numpy
 ```
 or, on Windows:
 ```bash
-py -m venv cvvenv
-cvvenv\Scripts\activate 
-py -m pip install --update pip
-py -m pip install opencv-python
+pip install --upgrade pip
+pip install opencv-python numpy --user
 ```
+To avoid problems with version dependencies, please consider setting up a new virtual environment as described below.
 
 Program development environments were Linux Ubuntu 24.04 with Python 3.12 and Windows 11 with Python 3.11.
 
@@ -54,7 +51,7 @@ or download the zip file:`
 https://github.com/csecht/draw-yolo-obb/archive/refs/heads/main.zip
 ```
 
-To run, from a terminal window opened from the downloaded draw_yolo_obb_main folder (and from within the cvvenv environment, as described above), enter:
+To run, from a terminal window opened from the downloaded draw_yolo_obb_main folder, enter:
 ```bash
 python3 -m draw-yolo-obb
 ```
@@ -63,7 +60,7 @@ or, on Windows:
 py -m draw-yolo-obb
 ```
 
-The script will load a sample image at startup. Use the `Load new image file` button on the YOLO OBB Control window to select any JPEG or PNG file. For ease of navigation, it is most convenient to copy images that you want to annotate into the program's downloaded `images` folder.
+The script will load a sample image at startup. Use the `Load new image file` button on the YOLO OBB Control window to select any JPEG or PNG file. For ease of navigation, it is most convenient to copy images that you want to annotate into the repository's downloaded `images` folder.
 
 If your image has a corresponding YOLO labels .txt file used for object detection, then you can copy it into the `labels` folder. When the image file is loaded, you are given the option to view those object boxes. For viewing, labels files, using relative coordinates, can be either in the standard Ultralytics YOLO object detection format (class_index x_center y_center width height) or in the YOLO OBB format (class_index x1 y1 x2 y2 x3 y3 x4 y4). 
 
@@ -106,11 +103,11 @@ Key assignments are based on the QWERTY keyboard layout. The rationale is that k
 
 ### Screenshots:
 <p align="center">
-<img src="images/readme_images/control_window_saved.png">
+<img src="readme_images/control_window_saved.png">
 <p align="center">
 The program control window.
 <p align="center">
-<img src="images/readme_images/oyster_obb_result.jpg" width=400>
+<img src="readme_images/oyster_obb_result.jpg" width=400>
 <p align="center">
 The saved annotated image with 47 boxes.
 </p>
@@ -121,7 +118,7 @@ The saved annotated image with 47 boxes.
 * Box manipulations are center-oriented, so when initially positioning a box, roughly center it on the object, then adjust rotation, size, and dimensions.
 * When needing a box for a different object class, remember to change the class index in the YOLO OBB Control window before drawing the box.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
-* The OpenCV window manager on Ubuntu Linux allows you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. The 'h' key pops up a help window with keyboard shortcuts. Windows won't zoom with the mouse, but you can use the normal window bar right-click to maximize the image to fullscreen size.
+* The OpenCV window manager allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. The 'h' key pops up a help window with keyboard shortcuts.
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
 * If you are right-clicking to draw a box and nothing is happening, remember to first press the 'n' key, then right-click twice to define the opposite corners.
 * The terminal window provides feedback on save actions and errors. It may
@@ -132,8 +129,6 @@ with Esc key or the window close button, 'X'.
 
 ### Known Issues:
 It should be possible to run `draw-yolo-obb.py` in macOS, but the right combinations of Qt options, OpenCV dependencies, and macOS versions haven't been explored.
-
-Mouse zooming or panning of the OpenCV image doesn't work in Windows 11, at least with this script implementation. See Tips for workarounds.
 
 ### Attributions
 Program development was with the help of the following resources:
