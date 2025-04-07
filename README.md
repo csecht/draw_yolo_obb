@@ -120,6 +120,7 @@ The saved annotated image with 47 boxes.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
 * The OpenCV window manager allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. The 'h' key pops up a help window with keyboard shortcuts.
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
+* Box line may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and thus may overlap the object.
 * If you are right-clicking to draw a box and nothing is happening, remember to first press the 'n' key, then right-click twice to define the opposite corners.
 * The terminal window provides feedback on save actions and errors. It may
 be covered by the main image window, so reposition windows as needed.
