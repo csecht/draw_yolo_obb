@@ -186,7 +186,7 @@ class BoxDrawer:
             sys.exit(1)
 
         # Used for threading and synchronization.
-        self.stop_event = threading.Event()
+        self.stop_loop = threading.Event()
         self.control_lock = threading.RLock()
 
         self.window_name = ''
@@ -371,7 +371,7 @@ class BoxDrawer:
         self.active_box.height = max(self.active_box.height, min_d)
         self.active_box.width = max(self.active_box.width, min_d)
 
-    def draw_box(self, event: Optional[threading.Event] = None) -> None:
+    def draw_box(self) -> None:
         """
         Draw rectangular polygons on the image and handle user interactions.
         A while loop keeps the image updated with cv2.imshow and keeps key
@@ -393,7 +393,7 @@ class BoxDrawer:
         # BOX DRAWING and KEYBOARD ACTION LOOP
         # The loop provides live drawing updates as long as the threading.Event
         #  is not set. Event is set upon call to on_close().
-        while not self.stop_event.is_set():
+        while not self.stop_loop.is_set():
 
             # Using a copy allows live drawing of boxes.
             display_image = self.image_info['copy'].copy()
@@ -430,36 +430,42 @@ class BoxDrawer:
                                               class_idx=str(_box.class_index),
                                               box=_box,
                                               )
-            self.set_keys()
 
             cv2.imshow(self.window_name, display_image)
 
+            self.set_keys()
+
+        cv2.destroyWindow(self.window_name)
+
     def set_keys(self) -> None:
-
-
-        # Need image height and width for positioning boxes with the 'b' key.
-        display_img_h, display_img_w = self.image_info['h&w']
-
-        # Needs to be a factor of 360 rotation and of 'b' key rotation
-        # angle limit.
-        angle_increment = 1
-
-        if MY_OS == 'lin':  # Linux, waitKey() returns 0-255 for keys, so use ord()
+        """
+        Define all the key events for manipulating boxes in the CV window.
+        Called from draw_box() while the image is displayed.
+        """
+        if MY_OS == 'lin':
+            key = cv2.waitKey(1)  # restricts keycodes to 0-255
             left_arrow = 81
             right_arrow = 83
             up_arrow = 82
             down_arrow = 84
-        else:  # 'win', with waitKeyEx(), for Windows special keys (on HP Pavilion)
+            shift = 16
+            equal = 61
+            hyphen = 45
+        else:  # 'win'
+            key = cv2.waitKeyEx(1)  # for Windows special keys (on HP Pavilion)
             left_arrow = 2424832  # VK_LEFT, 0x25
             right_arrow = 2555904 # VK_RIGHT, 0x27
             up_arrow = 2490368  # VK_UP, 0x26
             down_arrow = 2621440  # VK_DOWN, 0x28
-            ctrl_key = 2247680  # VK_CONTROL, 0x11
+            shift = 2260480  # VK_SHIFT, 0x10
+            equal = 187 # VK_OEM_PLUS, 0xBB
+            hyphen = 189 # VK_OEM_MINUS, 0xBD
 
-        if MY_OS == 'lin':
-            key = cv2.waitKey(1) # Linux, restricts keycodes to 0-255
-        else: # 'win':
-            key = cv2.waitKeyEx(1)  # Windows, allows for special keys to be captured
+        # Need image height and width for positioning boxes with the 'b' key.
+        display_img_h, display_img_w = self.image_info['h&w']
+
+        # DEV: if changed, needs to be a factor of 360 rotation.
+        angle_increment = 1
 
         # Note: key functions require the cv2 window to be in focus (click image).
         # Note: current_class_index is set in YoloOBBControl.set_class_index().
@@ -935,10 +941,8 @@ class YoloOBBControl(tk.Tk):
     training image. From there the user can adjust size and rotation of
     the boxes and save the results for YOLO OBB model training.
     """
-    def __init__(self, drawing_class):
+    def __init__(self):
         super().__init__()
-
-        self.box_drawer = drawing_class
 
         self.entry_label = tk.Label()
         self.class_entry = tk.Entry()
@@ -992,7 +996,7 @@ class YoloOBBControl(tk.Tk):
 
         # This text will be replaced with save metrics when the user saves.
         self.info_txt.set(f"A yolo labels file in the"
-                          f" {self.box_drawer.labels_folder} folder\n"
+                          f" {box_drawer.labels_folder} folder\n"
                  'can draw those boxes on its corresponding image.')
         self.info_label.config(
             textvariable=self.info_txt,
@@ -1070,7 +1074,7 @@ class YoloOBBControl(tk.Tk):
         #  negative values and letters may be showing in the focused Entry field.
         try:
             class_index = abs(int(self.class_entry.get()))
-            self.box_drawer.current_class_index = class_index
+            box_drawer.current_class_index = class_index
         except ValueError:
             messagebox.showerror(title='Invalid class index',
                                  detail='Please enter an integer value.')
@@ -1081,13 +1085,13 @@ class YoloOBBControl(tk.Tk):
         """
         Increase the line thickness of the drawn boxes.
         """
-        self.box_drawer.image_info['line thickness'] += 1
+        box_drawer.image_info['line thickness'] += 1
 
     def decrease_line_thickness(self):
         """
         Decrease the line thickness of the drawn boxes.
         """
-        self.box_drawer.image_info['line thickness'] = max(1, self.box_drawer.image_info['line thickness'] - 1)
+        box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
 
     def get_labels(self, labels_path: str) -> Union[tuple[list, tuple], None]:
         """
@@ -1157,7 +1161,7 @@ class YoloOBBControl(tk.Tk):
         """
 
         # Clear existing boxes before adding new ones.
-        self.box_drawer.boxes.clear()
+        box_drawer.boxes.clear()
         labels_to_view, (img_h, img_w) = label_data
 
         # Check format of the first line of the labels file to determine
@@ -1184,11 +1188,11 @@ class YoloOBBControl(tk.Tk):
                                   points=points,
                                   rotation_angle=angle)
                     new_box.is_active = False
-                    self.box_drawer.boxes.append(new_box)
-                    self.box_drawer.active_box = new_box
+                    box_drawer.boxes.append(new_box)
+                    box_drawer.active_box = new_box
                     new_box.update_properties()
                     new_box.update_points()
-                    self.box_drawer.check_boundaries(new_box)
+                    box_drawer.check_boundaries(new_box)
 
                 except ValueError:
                     messagebox.showerror(
@@ -1199,10 +1203,10 @@ class YoloOBBControl(tk.Tk):
                     )
                     return
 
-        if self.box_drawer.boxes:
+        if box_drawer.boxes:
             messagebox.showinfo(
                 title='Conversion complete',
-                detail=f'{len(self.box_drawer.boxes)} OBB boxes were created\n'
+                detail=f'{len(box_drawer.boxes)} OBB boxes were created\n'
                        ' from the YOLO labels file.'
             )
 
@@ -1214,7 +1218,7 @@ class YoloOBBControl(tk.Tk):
         """
 
         # Close in the reverse of the order they were opened.
-        box_drawer.stop_event.set()  # Close the draw_box while loop.
+        box_drawer.stop_loop.set()
         cv_thread.join()
         self.destroy()
         print('User quit the program.')
@@ -1223,7 +1227,11 @@ class YoloOBBControl(tk.Tk):
 
 class Utility:
     """
-    A class to hold utility functions for the program.
+    A class of static methods to provide utility functions.
+    Methods include:
+    convert_from_obb_label_format()
+    convert_to_obb_label_format()
+    show_help()
     """
 
     @staticmethod
@@ -1269,29 +1277,6 @@ class Utility:
         # Return format: [(x1, y1), (x2, y2)] and rotation, for a Box object.
         return [(round(x_abs - w_abs * 0.5), round(y_abs - h_abs * 0.5)),
                 (round(x_abs + w_abs * 0.5), round(y_abs + h_abs * 0.5))], theta
-
-    @staticmethod
-    def show_help():
-        """
-        Show help documentation from the program docstring in a pop-up
-        window. Called from cv window with 'h' key.
-        Returns: None
-        """
-        help_win = tk.Toplevel()
-        help_win.title('Info and help tips')
-        help_win.wm_minsize(595, 200)  # May be platform dependent.
-        help_text = ScrolledText(master=help_win,
-                                 width=72, # 72 works for Linux and Windows.
-                                 height=25,
-                                 bg='dark slate grey',
-                                 fg='grey95',
-                                 relief='groove',
-                                 borderwidth=8,
-                                 padx=30, pady=30,
-                                 wrap=tk.WORD,
-                                 )
-        help_text.insert(tk.INSERT, __doc__)
-        help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
 
     @staticmethod
     def convert_to_obb_label_format(box: Box, im_size: tuple) -> str:
@@ -1354,6 +1339,29 @@ class Utility:
 
         return str(box.class_index) + ' ' + ' '.join(label_points)
 
+    @staticmethod
+    def show_help():
+        """
+        Show help documentation from the program docstring in a pop-up
+        window. Called from cv window with 'h' key.
+        Returns: None
+        """
+        help_win = tk.Toplevel()
+        help_win.title('Info and help tips')
+        help_win.wm_minsize(595, 200)  # May be platform dependent.
+        help_text = ScrolledText(master=help_win,
+                                 width=72, # 72 works for Linux and Windows.
+                                 height=25,
+                                 bg='dark slate grey',
+                                 fg='grey95',
+                                 relief='groove',
+                                 borderwidth=8,
+                                 padx=30, pady=30,
+                                 wrap=tk.WORD,
+                                 )
+        help_text.insert(tk.INSERT, __doc__)
+        help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
+
 
 if __name__ == "__main__":
 
@@ -1362,15 +1370,14 @@ if __name__ == "__main__":
     box_drawer = BoxDrawer(image_path='images/start_image.jpg')
 
     # Create the Tkinter YOLO control window as the main thread.
-    app = YoloOBBControl(box_drawer)
+    app = YoloOBBControl()
     app.config_control_window()
 
     # Run update_image_info() after app Tk window is initialized because
     #  it uses Tk winfo_screenwidth() and winfo_screenheight().
     box_drawer.update_image_info()
 
-    cv_thread = threading.Thread(target=box_drawer.draw_box,
-                                 args=(box_drawer.stop_event,))
+    cv_thread = threading.Thread(target=box_drawer.draw_box)
     cv_thread.start()
 
     print(f'{Path(sys.modules["__main__"].__file__).stem} now running...')
