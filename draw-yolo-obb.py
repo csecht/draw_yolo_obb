@@ -98,6 +98,8 @@ class Box:
         the points based on points and rotation angle.
         Called by BoxDrawer.handle_mouse_events(), key events in
         BoxDrawer.draw_box(), and YoloOBBControl.view_labels().
+        The *points* argument is expected to contain either two or four
+        points, and cen be either a list or a numpy array.
         """
 
         # Keep x and y coordinates within the image boundaries.
@@ -210,7 +212,8 @@ class BoxDrawer:
         self.b_box_counter = 0  # Counter for 'b' key presses
         self.current_class_index = 0
 
-        # Minimum size to prevent disappearing boxes or mouse handles.
+        # Minimum dimension pixel size to prevent disappearing, too small,
+        #  and out-of-bounds objects,
         self.min_dim = 12
 
         # cv2 colors for drawing boxes and text.
@@ -506,24 +509,25 @@ class BoxDrawer:
             if self.active_box and len(self.active_box.points) == 4:
 
                 # Need to offset the cloned box to avoid overlap, and
-                #  move away from a nearby image border.
-                offset_points = self.active_box.points.copy()
+                #  move away from a nearby image edge.
+                offset_points = np.array(self.active_box.points, dtype=int)
                 right_side, bottom_side = offset_points[2]
-                # left_side, top_side = offset_points[0]
-                if right_side + 10 >= display_img_w:
-                    for i, (x, y) in enumerate(offset_points):
-                        offset_points[i] = (x - 10, y)
-                elif bottom_side + 10 >= display_img_h:
-                    for i, (x, y) in enumerate(offset_points):
-                        offset_points[i] = (x, y - 10)
+
+                # Determine the edge offset based on the position of the box.
+                if right_side + self.min_dim >= display_img_w:
+                    offset = np.array([-self.min_dim, 0])
+                elif bottom_side + self.min_dim >= display_img_h:
+                    offset = np.array([0, -self.min_dim])
                 else:
-                    for i, (x, y) in enumerate(offset_points):
-                        offset_points[i] = (x + 10, y + 10)
+                    offset = np.array([self.min_dim, self.min_dim])
+
+                # Apply the offset to all points.
+                offset_points += offset
 
                 # Note that here four points are used, not two as
-                # with the 'b' or 'n' keys. Rotated points will be
-                # transformed in the update_properties() method to
-                # preserve height and width.
+                #  with the 'b' or 'n' keys. Rotated points will be
+                #  transformed in the Box class methods to preserve box
+                #  properties.
                 cloned_box = Box(class_index=self.active_box.class_index,
                                  points=offset_points,
                                  rotation_angle=self.active_box.rotation_angle)
