@@ -66,6 +66,7 @@ from typing import Optional, Union
 # Third party imports
 import cv2
 import numpy as np
+from scipy.optimize import anderson
 
 MY_OS = sys.platform[:3]  # 'lin', 'win', or 'dar'.
 if MY_OS == 'dar':
@@ -440,7 +441,7 @@ class BoxDrawer:
     def set_keys(self) -> None:
         """
         Define all the key events for manipulating boxes in the CV window.
-        Called from draw_box() while the image is displayed.
+        Called from draw_box() while the image is displayed from loop.
         """
         if MY_OS == 'lin':
             key = cv2.waitKey(1)  # restricts keycodes to 0-255
@@ -501,12 +502,23 @@ class BoxDrawer:
 
         # Press 'c' to clone (copy and paste) the active box.
         if key == ord("c"):
+
             if self.active_box and len(self.active_box.points) == 4:
 
-                # Need to shift the cloned box to avoid overlap.
+                # Need to offset the cloned box to avoid overlap, and
+                #  move away from a nearby image border.
                 offset_points = self.active_box.points.copy()
-                for i, (x, y) in enumerate(offset_points):
-                    offset_points[i] = (x + 10, y + 10)
+                right_side, bottom_side = offset_points[2]
+                # left_side, top_side = offset_points[0]
+                if right_side + 10 >= display_img_w:
+                    for i, (x, y) in enumerate(offset_points):
+                        offset_points[i] = (x - 10, y)
+                elif bottom_side + 10 >= display_img_h:
+                    for i, (x, y) in enumerate(offset_points):
+                        offset_points[i] = (x, y - 10)
+                else:
+                    for i, (x, y) in enumerate(offset_points):
+                        offset_points[i] = (x + 10, y + 10)
 
                 # Note that here four points are used, not two as
                 # with the 'b' or 'n' keys. Rotated points will be
@@ -562,7 +574,6 @@ class BoxDrawer:
                 self.active_box.width = max(1, self.active_box.width - 1)
                 self.set_min_hw(self.min_dim)
                 self.active_box.update_points()
-                self.check_boundaries(self.active_box)
 
         # The following layout of keys for manipulating the active box
         #  is based on the QWERTY keyboard layout.
@@ -615,7 +626,6 @@ class BoxDrawer:
                 self.active_box.height = max(1, self.active_box.height - 1)
                 self.set_min_hw(self.min_dim)
                 self.active_box.update_points()
-                self.check_boundaries(self.active_box)
 
         # Increase the width of the active box.
         if key == ord("f"):
@@ -630,7 +640,6 @@ class BoxDrawer:
                 self.active_box.width = max(1, self.active_box.width - 1)
                 self.set_min_hw(self.min_dim)
                 self.active_box.update_points()
-                self.check_boundaries(self.active_box)
 
         # Press 'h' to display help documentation in a pop-up window.
         if key == ord("h"):
@@ -1369,7 +1378,7 @@ if __name__ == "__main__":
     # Loading with a starting image is necessary for flow architecture.
     box_drawer = BoxDrawer(image_path='images/start_image.jpg')
 
-    # Create the Tkinter YOLO control window as the main thread.
+    # Create the tk.Tk control window as the main thread; via inheritance.
     app = YoloOBBControl()
     app.config_control_window()
 
@@ -1377,6 +1386,8 @@ if __name__ == "__main__":
     #  it uses Tk winfo_screenwidth() and winfo_screenheight().
     box_drawer.update_image_info()
 
+    # Run live updates of cv2 image with a threaded while loop.
+    #  Requires cv2.WINDOW_GUI_NORMAL instead of cv2.WINDOW_NORMAL.
     cv_thread = threading.Thread(target=box_drawer.draw_box)
     cv_thread.start()
 
