@@ -66,7 +66,6 @@ from typing import Optional, Union
 # Third party imports
 import cv2
 import numpy as np
-from scipy.optimize import anderson
 
 MY_OS = sys.platform[:3]  # 'lin', 'win', or 'dar'.
 if MY_OS == 'dar':
@@ -102,29 +101,23 @@ class Box:
         points, and cen be either a list or a numpy array.
         """
 
-        # Keep x and y coordinates within the image boundaries.
         img_h, img_w = box_drawer.image_info['h&w']
-        for i, (x, y) in enumerate(self.points):
-            if x < 0:
-                self.points[i] = (0, y)
-            elif x >= img_w:
-                self.points[i] = (img_w - 1, y)
-            if y < 0:
-                self.points[i] = (x, 0)
-            elif y >= img_h:
-                self.points[i] = (x, img_h - 1)
+
+        # Keep x and y coordinates within the image boundaries using numpy.
+        self.points = np.clip(self.points,
+                              [0, 0],
+                              [img_w - 1, img_h - 1],
+                              )
 
         # Used when creating a new axially oriented box, as with the
         # 'b' or 'n' keys, or when processing imported YOLO OBB labels
         # from view_labels().
         if len(self.points) == 2:
-            (x1, y1), (x2, y2) = self.points
-            self.center = (round((x1 + x2) * 0.5), round((y1 + y2) * 0.5))
-            self.width = abs(x2 - x1)
-            self.height = abs(y2 - y1)
+            points_array = np.array(self.points)
+            self.center = tuple(np.round(points_array.mean(axis=0)).astype(int))
+            self.width, self.height = np.abs(points_array[1] - points_array[0])
 
-        # Used when cloning (copy and pasting) an existing box with the
-        # 'c' key.
+        # Used when cloning (copy and pasting) an existing box with the 'c' key.
         else: # len(self.points) == 4:
             x_coords, y_coords = zip(*self.points)
             self.center = (sum(x_coords) / 4, sum(y_coords) / 4)
@@ -158,20 +151,26 @@ class Box:
 
         half_w = self.width / 2
         half_h = self.height / 2
-        corners = [
-            (-half_w, -half_h),  # Top-left
-            (half_w, -half_h),   # Top-right
-            (half_w, half_h),    # Bottom-right
-            (-half_w, half_h),  # Bottom-left
-        ]
+        corners = np.array([
+            [-half_w, -half_h],  # Top-left
+            [half_w, -half_h],   # Top-right
+            [half_w, half_h],    # Bottom-right
+            [-half_w, half_h],   # Bottom-left
+        ])
 
-        self.points = []
-        for (x, y) in corners:
-            angle_rad = np.radians(self.rotation_angle)
-            x_rot = x * np.cos(angle_rad) - y * np.sin(angle_rad)
-            y_rot = x * np.sin(angle_rad) + y * np.cos(angle_rad)
-            self.points.append((round(self.center[0] + x_rot),
-                                round(self.center[1] + y_rot)))
+        angle_rad = np.radians(self.rotation_angle)
+        rotation_matrix = np.array([
+            [np.cos(angle_rad), -np.sin(angle_rad)],
+            [np.sin(angle_rad), np.cos(angle_rad)]
+        ])
+
+        rotated_corners = corners @ rotation_matrix.T
+
+        # Translate the rotated corners to the box center.
+        self.points = [
+            (round(self.center[0] + corner[0]), round(self.center[1] + corner[1]))
+            for corner in rotated_corners
+        ]
 
 
 class BoxDrawer:
