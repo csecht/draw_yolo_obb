@@ -239,7 +239,7 @@ class BoxDrawer:
         """
 
         with self.control_lock:
-            # Disable window close button
+            # Disable window close button 'X'.
             app.protocol('WM_DELETE_WINDOW', lambda: None)
 
             self.image_path: str = filedialog.askopenfilename(
@@ -270,7 +270,7 @@ class BoxDrawer:
                 # Reset the box counter for the 'b' key.
                 self.b_box_counter = 0
 
-            # Re-enable window close button
+            # Re-enable window close button 'X'.
             app.protocol('WM_DELETE_WINDOW', app.on_close)
 
 
@@ -339,7 +339,7 @@ class BoxDrawer:
 
         self.image_info = {
             'copy': image_copy,
-            'h&w': self.image_array.shape[:2],
+            'h&w': (img_h, img_w),
             'short name': image_name,
             'full name': img_name_and_extension,
             'font scale': font_scale,
