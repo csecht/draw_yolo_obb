@@ -84,7 +84,7 @@ class Box:
 
     def __init__(self, class_index=0, points=None, rotation_angle=0, ):
         self.class_index = class_index
-        self.points = points if points is not None else []
+        self.points = points if points is not None else np.array([(0, 0), (0, 0)])
         self.rotation_angle = rotation_angle  # degrees
         self.center = None
         self.width = 0
@@ -103,35 +103,30 @@ class Box:
 
         img_h, img_w = box_drawer.image_info['h&w']
 
-        # Keep x and y coordinates within the image boundaries using numpy.
-        self.points = np.clip(self.points,
-                              [0, 0],
-                              [img_w - 1, img_h - 1],
-                              )
+        # Clip points to ensure they are within image boundaries
+        self.points = np.clip(self.points, a_min=[0, 0], a_max=[img_w - 1, img_h - 1])
 
-        # Used when creating a new axially oriented box, as with the
-        # 'b' or 'n' keys, or when processing imported YOLO OBB labels
-        # from view_labels().
         if len(self.points) == 2:
-            points_array = np.array(self.points)
-            self.center = tuple(np.round(points_array.mean(axis=0)).astype(int))
-            self.width, self.height = np.abs(points_array[1] - points_array[0])
+            # Axially oriented box: calculate center, width, and height
+            self.center = tuple(np.mean(self.points, axis=0).astype(int))
+            self.width, self.height = np.abs(self.points[1] - self.points[0])
 
-        # Used when cloning (copy and pasting) an existing box with the 'c' key.
-        else: # len(self.points) == 4:
-            x_coords, y_coords = zip(*self.points)
-            self.center = (sum(x_coords) / 4, sum(y_coords) / 4)
-            rotation_matrix = cv2.getRotationMatrix2D(self.center,
-                                                      self.rotation_angle,
-                                                      scale=1)
+        elif len(self.points) == 4:
+            # Rotated box: calculate center, width, and height
+            self.center = tuple(np.mean(self.points, axis=0))
 
-            # Need to rotate points to calculate width and height.
-            rotated_points = cv2.transform(np.array([self.points]),
-                                           rotation_matrix)[0]
+            # Rotate points to align with axes for width and height calculation
+            rotation_matrix = cv2.getRotationMatrix2D(
+                self.center,
+                self.rotation_angle,
+                scale=1)
+            rotated_points = cv2.transform(
+                self.points[None, :, :], rotation_matrix)[0]
 
-            x_coords, y_coords = zip(*rotated_points)
-            self.width = max(x_coords) - min(x_coords)
-            self.height = max(y_coords) - min(y_coords)
+            # Calculate width and height from rotated points
+            x_coords, y_coords = rotated_points[:, 0], rotated_points[:, 1]
+            self.width = np.ptp(x_coords)  # Peak-to-peak (max - min)
+            self.height = np.ptp(y_coords)  # Peak-to-peak (max - min)
 
     def update_points(self):
         """
@@ -145,12 +140,14 @@ class Box:
         properties (center, width, height, or rotation angle).
         """
 
-        # Need to validate Box properties before proceeding.
-        if self.center is None or self.width == 0 or self.height == 0:
+        # Validate Box properties before proceeding.
+        if not self.center or self.width <= 0 or self.height <= 0:
             return
 
-        half_w = self.width / 2
-        half_h = self.height / 2
+        # Precompute half dimensions.
+        half_w, half_h = self.width / 2, self.height / 2
+
+        # Define corners relative to the center.
         corners = np.array([
             [-half_w, -half_h],  # Top-left
             [half_w, -half_h],   # Top-right
@@ -158,19 +155,16 @@ class Box:
             [-half_w, half_h],   # Bottom-left
         ])
 
+        # Precompute rotation matrix.
         angle_rad = np.radians(self.rotation_angle)
+        cos_angle, sin_angle = np.cos(angle_rad), np.sin(angle_rad)
         rotation_matrix = np.array([
-            [np.cos(angle_rad), -np.sin(angle_rad)],
-            [np.sin(angle_rad), np.cos(angle_rad)]
+            [cos_angle, -sin_angle],
+            [sin_angle, cos_angle]
         ])
 
-        rotated_corners = corners @ rotation_matrix.T
-
-        # Translate the rotated corners to the box center.
-        self.points = [
-            (round(self.center[0] + corner[0]), round(self.center[1] + corner[1]))
-            for corner in rotated_corners
-        ]
+        # Rotate and translate corners in one step.
+        self.points = np.round(corners @ rotation_matrix.T + self.center).astype(int)
 
 
 class BoxDrawer:
@@ -404,15 +398,12 @@ class BoxDrawer:
             for _box in self.boxes:
                 if len(_box.points) == 4:
 
-                    # Need points in proper array format for cv2.polylines.
-                    pts = np.array(_box.points, np.int32)
-                    pts = pts.reshape((-1, 1, 2))
-
                     # Highlight active box in red, all others in green.
                     color = (self.cv_font_color['green']
                              if not _box.is_active else self.cv_font_color['red'])
+
                     cv2.polylines(img=display_image,
-                                  pts=[pts],
+                                  pts=[_box.points],
                                   isClosed=True,
                                   color=color,
                                   thickness=self.image_info['line thickness'],
@@ -420,11 +411,10 @@ class BoxDrawer:
 
                     # Draw a circle in the bottom-right corner of the active box.
                     # Make radius size relative to image size.
-                    scaled_radius = self.get_circle_radius()
                     if _box.is_active:
                         cv2.circle(display_image,
                                    center=_box.points[2],
-                                   radius=scaled_radius,
+                                   radius=self.get_circle_radius(),
                                    color=self.cv_font_color['cyan'],
                                    thickness=cv2.FILLED,
                                    )
@@ -473,7 +463,10 @@ class BoxDrawer:
         # Note: key functions require the cv2 window to be in focus (click image).
         # Note: current_class_index is set in YoloOBBControl.set_class_index().
 
-        # Press 'n' to start a new box when placing a box with right button clicks.
+        # Press 'n' to start a new box when placing a box with two right button
+        #  clicks. The two coordinates are used to define the top-left and
+        #  bottom-right corners of the box, which are processed in
+        #  handle_mouse_events() for the new boxes.points array.
         if key == ord("n"):
             self.active_box = None
             self.boxes.append(Box(class_index=self.current_class_index))
@@ -505,11 +498,11 @@ class BoxDrawer:
         # Press 'c' to clone (copy and paste) the active box.
         if key == ord("c"):
 
-            if self.active_box and len(self.active_box.points) == 4:
+            if self.active_box:  # len(self.active_box.points) == 4
 
-                # Need to offset the cloned box to avoid overlap, and
+                # Need to offset the cloned points to avoid overlap, and
                 #  move away from a nearby image edge.
-                offset_points = np.array(self.active_box.points, dtype=int)
+                offset_points = self.active_box.points.copy()
                 right_side, bottom_side = offset_points[2]
 
                 # Determine the edge offset based on the position of the box.
@@ -725,16 +718,22 @@ class BoxDrawer:
                 self.active_box = None
 
         elif event == cv2.EVENT_RBUTTONDOWN:
-            # If no box is active, start drawing a new box. It takes two
-            # clicks set the top-left and bottom-right corners of a box.
-            if (not self.active_box and
-                    len(self.boxes) > 0 and
-                    len(self.boxes[-1].points) < 2):
-                self.boxes[-1].points.append((x, y))
-                if len(self.boxes[-1].points) == 2:
+            # If no box is active, start drawing a new box. Two rt-clicks
+            #  set the top-left and bottom-right corners of a new box.
+
+            # New box starts with default points, [[0, 0], [0, 0]].
+            # Sum the values of points in the new box, self.boxes[-1],
+            #  to evaluate both coordinate sets in the points array.
+            if (not self.active_box and len(self.boxes) > 0 and
+                    any(sum(point) == 0 for point in self.boxes[-1].points)):
+                for i, point in enumerate(self.boxes[-1].points):
+                    if sum(point) == 0:
+                        self.boxes[-1].points[i] = [x, y]
+                        break
+                if all(sum(point) > 0 for point in self.boxes[-1].points):
                     self.boxes[-1].update_properties()
                     self.boxes[-1].update_points()
-                    self.boxes[-1].is_active = True  # Ensure the new box is active
+                    self.boxes[-1].is_active = True
                     self.active_box = self.boxes[-1]
 
         elif event == cv2.EVENT_MOUSEMOVE:
@@ -794,7 +793,7 @@ class BoxDrawer:
             self.is_dragging_corner = False
             self.is_dragging_box = False
 
-    def is_point_inside_box(self, point: tuple, box_points: list) -> bool:
+    def is_point_inside_box(self, point: tuple, box_points: np.ndarray) -> bool:
         """
         Check if a clicked point is inside a box using the ray casting algorithm.
         Args:
@@ -818,9 +817,7 @@ class BoxDrawer:
             if abs(corner_x - x) <= min_drag_size and abs(corner_y - y) <= min_drag_size:
                 return False
 
-        pts = np.array(box_points, np.int32)
-        pts = pts.reshape((-1, 1, 2))
-        return cv2.pointPolygonTest(contour=pts, pt=(x, y), measureDist=False) >= 0
+        return cv2.pointPolygonTest(contour=box_points, pt=(x, y), measureDist=False) >= 0
 
     def is_point_outside_all_boxes(self, point: tuple, boxes: list) -> bool:
         """
