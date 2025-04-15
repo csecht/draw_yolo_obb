@@ -96,7 +96,7 @@ class Box:
         Calculate the center, width, and height of a box; transforms
         the points based on points and rotation angle.
         Called by BoxDrawer.handle_mouse_events(), key events in
-        BoxDrawer.draw_box(), and YoloOBBControl.view_labels().
+        BoxDrawer.draw_box(), and Utility.view_labels().
         The *points* argument is expected to contain either two or four
         points, and cen be either a list or a numpy array.
         """
@@ -117,9 +117,7 @@ class Box:
 
             # Rotate points to align with axes for width and height calculation
             rotation_matrix = cv2.getRotationMatrix2D(
-                self.center,
-                self.rotation_angle,
-                scale=1)
+                self.center, self.rotation_angle, scale=1)
             rotated_points = cv2.transform(
                 self.points[None, :, :], rotation_matrix)[0]
 
@@ -133,7 +131,7 @@ class Box:
         Update the box's points based on its center, width, height, and
         rotation angle.
         Called from check_boundaries(), handle_mouse_events() and
-        key events in BoxDrawer class, YoloOBBControl.view_labels(), and
+        key events in BoxDrawer class, Utility.view_labels(), and
         when the box properties are updated to recalculate the points
         for the box. This is essential for ensuring the points are
         correctly positioned after any manipulation of the box's
@@ -293,7 +291,7 @@ class BoxDrawer:
                     try:
                         labels_to_view = app.get_labels(labels_path=labels_path)
                         if labels_to_view:
-                            app.view_labels(label_data=labels_to_view)
+                            Utility.view_labels(label_data=labels_to_view)
                     except FileNotFoundError as e:
                         print('DEV: From look_for_labels(),'
                               f' no labels file found for {img_path}.\n'
@@ -987,7 +985,6 @@ class YoloOBBControl(tk.Tk):
         self.line_thickness_label.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
-
         self.title('YOLO OBB Control')
         self.attributes("-topmost", True)
         self.geometry('390x255+100+400')  # width x height + x_offset + y_offset
@@ -1029,13 +1026,13 @@ class YoloOBBControl(tk.Tk):
         increase_thickness_btn = tk.Button(
             master=self,
             text='＋',  # Full-width plus sign, from https://coolsymbol.com/
-            command=self.increase_line_thickness,
+            command=Utility.increase_line_thickness,
             background=self.color['line button'],
         )
         decrease_thickness_btn = tk.Button(
             master=self,
             text='－',  # Full-width minus sign, from https://coolsymbol.com/
-            command=self.decrease_line_thickness,
+            command=Utility.decrease_line_thickness,
             background=self.color['line button'],
         )
 
@@ -1090,18 +1087,6 @@ class YoloOBBControl(tk.Tk):
             self.class_entry.delete(first=0, last=tk.END)  # Clear the entry field.
             self.class_entry.insert(index=tk.INSERT, string='0')  # Reset default value.
 
-    def increase_line_thickness(self):
-        """
-        Increase the line thickness of the drawn boxes.
-        """
-        box_drawer.image_info['line thickness'] += 1
-
-    def decrease_line_thickness(self):
-        """
-        Decrease the line thickness of the drawn boxes.
-        """
-        box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
-
     def get_labels(self, labels_path: str) -> Union[tuple[list, tuple], None]:
         """
         Generates label data to be used by the view_labels() method.
@@ -1153,7 +1138,35 @@ class YoloOBBControl(tk.Tk):
         # Return the labels and the image h,w for conversion by view_labels().
         return labels_to_convert, box_drawer.image_info['h&w'][:2]
 
-    def view_labels(self, label_data: tuple):
+    def on_close(self):
+        """
+        Allows clean closing or Tkinter and cv2 windows. Exit by using
+        main window 'X' button or Esc key press.
+        Called from YoloInfoWindow __init__() window protocol and button.
+        """
+
+        # Close in the reverse of the order they were opened.
+        box_drawer.stop_loop.set()
+        cv_thread.join()
+        self.destroy()
+        print('User quit the program.')
+        sys.exit(0)
+
+
+class Utility:
+    """
+    A class of static methods to provide utility functions.
+    Methods include:
+    view_labels()
+    convert_from_obb_label_format()
+    convert_to_obb_label_format()
+    increase_line_thickness()
+    decrease_line_thickness()
+    show_help()
+    """
+
+    @staticmethod
+    def view_labels(label_data: tuple):
         """
         Provides Box formatting and BoxDrawer display of YOLO object
         detection data. Calls get_labels() to get the data
@@ -1188,7 +1201,7 @@ class YoloOBBControl(tk.Tk):
                         angle = 0
                     elif len(data) == 9:  # OBB format
                         class_index, *points = data
-                        points, angle = Utility.convert_from_obb_label_format(
+                        points, angle = convert_from_obb_label_format(
                             pts=points, im_size=(img_h, img_w))
                     else:
                         raise ValueError
@@ -1218,30 +1231,6 @@ class YoloOBBControl(tk.Tk):
                 detail=f'{len(box_drawer.boxes)} OBB boxes were created\n'
                        ' from the YOLO labels file.'
             )
-
-    def on_close(self):
-        """
-        Allows clean closing or Tkinter and cv2 windows. Exit by using
-        main window 'X' button or Esc key press.
-        Called from YoloInfoWindow __init__() window protocol and button.
-        """
-
-        # Close in the reverse of the order they were opened.
-        box_drawer.stop_loop.set()
-        cv_thread.join()
-        self.destroy()
-        print('User quit the program.')
-        sys.exit(0)
-
-
-class Utility:
-    """
-    A class of static methods to provide utility functions.
-    Methods include:
-    convert_from_obb_label_format()
-    convert_to_obb_label_format()
-    show_help()
-    """
 
     @staticmethod
     def convert_from_obb_label_format(pts: list,
@@ -1347,6 +1336,20 @@ class Utility:
         label_points = [f"{point:.6f}" for point in normalized_points.flatten()]
 
         return str(box.class_index) + ' ' + ' '.join(label_points)
+
+    @staticmethod
+    def increase_line_thickness():
+        """
+        Increase the line thickness of the drawn boxes.
+        """
+        box_drawer.image_info['line thickness'] += 1
+
+    @staticmethod
+    def decrease_line_thickness():
+        """
+        Decrease the line thickness of the drawn boxes.
+        """
+        box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
 
     @staticmethod
     def show_help():
