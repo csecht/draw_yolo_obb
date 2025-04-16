@@ -77,16 +77,16 @@ class Box:
     """
     A class to represent a rectangular polygon for use as a YOLO oriented
     bounding box.
-    Called from BoxDrawer class to append the box's class indes,
+    Called from BoxDrawer class to append the box's class index,
     point coordinates, and rotation angle to the boxes list whenever
-    a new box is drawn or manipulated.
+    a box is drawn or manipulated.
     """
 
     def __init__(self, class_index=0, points=None, rotation_angle=0, ):
-        self.class_index = class_index
+        self.class_index: int = class_index
         self.points = points if points is not None else np.array([(0, 0), (0, 0)])
         self.rotation_angle = rotation_angle  # degrees
-        self.center = None
+        self.center = (0, 0)
         self.width = 0
         self.height = 0
         self.is_active = False  # Tracks if this box is currently active
@@ -139,8 +139,8 @@ class Box:
         """
 
         # Validate Box properties before proceeding.
-        if not self.center or self.width <= 0 or self.height <= 0:
-            return
+        # if not self.center or self.width <= 0 or self.height <= 0:
+        #     return
 
         # Precompute half dimensions.
         half_w, half_h = self.width / 2, self.height / 2
@@ -160,7 +160,7 @@ class Box:
             [np.sin(angle_rad), np.cos(angle_rad)]
         ])
 
-        # Rotate and translate corners in one step.
+        # Rotate and translate corners to pixel coordinates in one step.
         self.points = np.round(corners @ rotation_matrix.T + self.center).astype(int)
 
 
@@ -308,12 +308,10 @@ class BoxDrawer:
         img_h, img_w, _ = self.image_array.shape
 
         # Need the maximum CV window to be smaller than the screen size,
-        #  and easily fit-to-scale the largest image dimension.
+        #  and comfortably scale-to-fit the largest image dimension.
         win_h = app.winfo_screenheight() * 0.85
         win_w = app.winfo_screenwidth() * 0.85
-        display_h_factor = img_h / win_h if img_h > win_h else win_h / img_h
-        display_w_factor = img_w / win_w if img_w > win_w else win_w / img_w
-        display_factor = max(display_h_factor, display_w_factor)
+        display_factor = max(img_h / win_h, img_w / win_w) if img_h > win_h or img_w > win_w else 1
 
         # Ideas for scaling: https://stackoverflow.com/questions/52846474/
         #   how-to-resize-text-for-cv2-puttext-according-to-the-image-object_size-in-opencv-python
@@ -1195,7 +1193,7 @@ class Utility:
                         angle = 0
                     elif len(data) == 9:  # OBB format
                         class_index, *points = data
-                        points, angle = convert_from_obb_label_format(
+                        points, angle = Utility.convert_from_obb_label_format(
                             pts=points, im_size=(img_h, img_w))
                     else:
                         raise ValueError
