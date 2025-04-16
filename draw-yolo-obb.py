@@ -155,10 +155,9 @@ class Box:
 
         # Precompute rotation matrix.
         angle_rad = np.radians(self.rotation_angle)
-        cos_angle, sin_angle = np.cos(angle_rad), np.sin(angle_rad)
         rotation_matrix = np.array([
-            [cos_angle, -sin_angle],
-            [sin_angle, cos_angle]
+            [np.cos(angle_rad), -np.sin(angle_rad)],
+            [np.sin(angle_rad), np.cos(angle_rad)]
         ])
 
         # Rotate and translate corners in one step.
@@ -753,15 +752,9 @@ class BoxDrawer:
                 dx_rot = dx * np.cos(-angle_rad) - dy * np.sin(-angle_rad)
                 dy_rot = dx * np.sin(-angle_rad) + dy * np.cos(-angle_rad)
 
-                # Update the box width and height.
-                new_width = 2 * abs(dx_rot)
-                new_height = 2 * abs(dy_rot)
-
-                # Minimum width and height to avoid disappearing boxes
-                if new_width < self.min_dim:
-                    new_width = self.min_dim
-                if new_height < self.min_dim:
-                    new_height = self.min_dim
+                # Update the box width and height, ensuring minimum dimensions
+                new_width = max(2 * abs(dx_rot), self.min_dim)
+                new_height = max(2 * abs(dy_rot), self.min_dim)
 
                 # Check if the new width or height would exceed the image boundaries.
                 if (self.active_box.center[0] - new_width / 2 < 0 or
@@ -1074,6 +1067,7 @@ class YoloOBBControl(tk.Tk):
         """
         Sets Box.class_index for the current box. This is the index of
         the class label for the box, as required for YOLO OBB label data.
+        Called from class_entry.bind() methods.
         """
 
         # Force positive integer class index when loose focus, for when
@@ -1136,7 +1130,7 @@ class YoloOBBControl(tk.Tk):
             return None
 
         # Return the labels and the image h,w for conversion by view_labels().
-        return labels_to_convert, box_drawer.image_info['h&w'][:2]
+        return labels_to_convert, box_drawer.image_info['h&w']
 
     def on_close(self):
         """
