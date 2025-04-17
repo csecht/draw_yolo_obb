@@ -84,6 +84,8 @@ class Box:
 
     def __init__(self, class_index=0, points=None, rotation_angle=0, ):
         self.class_index: int = class_index
+
+        # The points argument can be a list or a numpy array.
         self.points = points if points is not None else np.array([(0, 0), (0, 0)])
         self.rotation_angle = rotation_angle  # degrees
         self.center = (0, 0)
@@ -107,24 +109,23 @@ class Box:
         self.points = np.clip(self.points, a_min=[0, 0], a_max=[img_w - 1, img_h - 1])
 
         if len(self.points) == 2:
-            # Axially oriented box: calculate center, width, and height
+            # Axially oriented box: calculate center, width, and height.
             self.center = tuple(np.mean(self.points, axis=0).astype(int))
             self.width, self.height = np.abs(self.points[1] - self.points[0])
 
         elif len(self.points) == 4:
-            # Rotated box: calculate center, width, and height
+            # Rotated box: calculate center, width, and height.
+            # Rotate points to align with axes for width and height calculation.
+            # The `None` indexing adds a third dimension to the array for
+            # `cv2.transform`. The `[0]` indexing extracts the transformed
+            # points to re-form a 2D array with new corner coordinates.
             self.center = tuple(np.mean(self.points, axis=0))
-
-            # Rotate points to align with axes for width and height calculation
             rotation_matrix = cv2.getRotationMatrix2D(
                 self.center, self.rotation_angle, scale=1)
             rotated_points = cv2.transform(
                 self.points[None, :, :], rotation_matrix)[0]
-
-            # Calculate width and height from rotated points
-            x_coords, y_coords = rotated_points[:, 0], rotated_points[:, 1]
-            self.width = np.ptp(x_coords)  # Peak-to-peak (max - min)
-            self.height = np.ptp(y_coords)  # Peak-to-peak (max - min)
+            self.width = np.ptp(rotated_points[:, 0])  # Peak-to-peak x coord (max - min)
+            self.height = np.ptp(rotated_points[:, 1])  # Peak-to-peak y coord (max - min)
 
     def update_points(self):
         """
@@ -137,10 +138,6 @@ class Box:
         correctly positioned after any manipulation of the box's
         properties (center, width, height, or rotation angle).
         """
-
-        # Validate Box properties before proceeding.
-        # if not self.center or self.width <= 0 or self.height <= 0:
-        #     return
 
         # Precompute half dimensions.
         half_w, half_h = self.width / 2, self.height / 2
@@ -315,15 +312,14 @@ class BoxDrawer:
 
         # Ideas for scaling: https://stackoverflow.com/questions/52846474/
         #   how-to-resize-text-for-cv2-puttext-according-to-the-image-object_size-in-opencv-python
-        # h, w, _ = img.shape # or img.shape[1::-1] -> (width, height)
         # The conversion factors were empirically determined.
         avg_d = (win_h + win_w) * 0.5
         line_thickness = max(round(avg_d * 0.001 * display_factor), 2)
         font_scale = max(avg_d * 0.0002, 0.4) * display_factor
 
         # Factors used in cv2.resizeWindow() to scale window to fit each image.
-        window_h = round(img_h / display_factor)
-        window_w = round(img_w / display_factor)
+        cv_win_h = round(img_h / display_factor)
+        cv_win_w = round(img_w / display_factor)
 
         self.image_info = {
             'copy': image_copy,
@@ -333,8 +329,8 @@ class BoxDrawer:
             'font scale': font_scale,
             'line thickness': line_thickness,
             # Used by resizeWindow() to perfectly fit the image.
-            'window_h': window_h,
-            'window_w': window_w,
+            'window_h': cv_win_h,
+            'window_w': cv_win_w,
         }
 
     def get_circle_radius(self) -> int:
@@ -492,12 +488,11 @@ class BoxDrawer:
 
         # Press 'c' to clone (copy and paste) the active box.
         if key == ord("c"):
-
             if self.active_box:  # len(self.active_box.points) == 4
 
                 # Need to offset the cloned points to avoid overlap, and
                 #  move away from a nearby image edge.
-                offset_points = self.active_box.points.copy()
+                offset_points: np.array = self.active_box.points.copy()
                 right_side, bottom_side = offset_points[2]
 
                 # Determine the edge offset based on the position of the box.
@@ -878,11 +873,11 @@ class BoxDrawer:
         Called from the 'Save' button in YoloOBBControl.config_control_window()
         """
         with self.control_lock:
-            # Each time 'n' is pressed, an empty points list is appended to the
-            #  boxes list before any box is drawn. Multiple 'n' presses
-            #  will append multiple empty lists to it. So, need to remove all
-            #  empty elements for an accurate count of drawn boxes.
-            self.boxes = [box for box in self.boxes if len(box.points) == 4]
+            # Each time 'n' is pressed, an empty points array is appended to
+            #  the boxes list before any box is drawn. Multiple 'n' presses
+            #  will append multiple 2-point 0,0 arrays to it. So, need to remove
+            #  all non-4-point elements for an accurate count of drawn boxes.
+            self.boxes = [_box for _box in self.boxes if len(_box.points) == 4]
 
             if not self.boxes:
                 app.info_txt.set('No boxes to save.')
@@ -894,7 +889,6 @@ class BoxDrawer:
 
             result_image = self.image_array.copy()
             img_name = self.image_info['short name']
-            img_h, img_w = self.image_info['h&w']
 
             # Box.points are in absolute coordinates. So, need to convert pixels to
             #  normalized coordinates (0.0 to 1.0).
@@ -902,8 +896,8 @@ class BoxDrawer:
             with open(f"results/{img_name}.txt", "w") as file:
                 for _box in self.boxes:
                     if len(_box.points) == 4:
-                        obb_label = Utility.convert_to_obb_label_format(box=_box, im_size=(img_h,
-                                                                                      img_w))
+                        obb_label = Utility.convert_to_obb_label_format(
+                            box=_box, im_size=self.image_info['h&w'])
                         file.write(f'{obb_label}\n')
 
                         pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
