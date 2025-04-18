@@ -819,29 +819,6 @@ class BoxDrawer:
                 return False
         return True
 
-    def get_text_position_offsets(self, txt_string: str) -> tuple[float, int]:
-        """
-        Calculate the x and y position correction factors to help center
-        *txt_string* in cv2.putText() for annotating objects.
-        Called from annotate_object().
-
-        Args:
-            txt_string: A string of the object's size to display.
-        Returns:
-            A tuple of x and y position adjustment factors for size
-            annotation.
-        """
-
-        ((txt_width, _), baseline) = cv2.getTextSize(
-            text=txt_string,
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=self.image_info['font scale'],
-            thickness=1 #self.image_info['line thickness'],
-        )
-        offset_x = txt_width / 2
-
-        return offset_x, baseline
-
     def put_text_class_index(self,
                              image: np.ndarray,
                              class_idx: str,
@@ -854,7 +831,10 @@ class BoxDrawer:
         # Center the size text in the OBB with the 'org' argument.
         #  org: bottom-left corner of the text annotation for an object.
         corner_x, corner_y = box.points[2]
-        offset_x, offset_y = self.get_text_position_offsets(class_idx)
+        offset_x, offset_y = Utility.get_text_offsets(
+            txt_string=class_idx,
+            scale=self.image_info['font scale'],
+        )
         text_orig = (round(corner_x - offset_x), round(corner_y + offset_y))
 
         cv2.putText(img=image,
@@ -946,6 +926,7 @@ class YoloOBBControl(tk.Tk):
 
         # Want the 'Get new image' button bg to match the image name label fg
         #  when focusOut. When focusIn, image name label fg uses a better contrast.
+        #  The color values are X11 color names recognized by tkinter.
         self.color = {
             'img label': 'gold',
             'window': 'gray75',
@@ -1336,6 +1317,32 @@ class Utility:
         Decrease the line thickness of the drawn boxes.
         """
         box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
+
+    @staticmethod
+    def get_text_offsets(txt_string: str,
+                         scale: float) -> tuple[float, int]:
+        """
+        Calculate the x and y position correction factors to help center
+        *txt_string* in cv2.putText() for annotating objects.
+        Called from annotate_object().
+
+        Args:
+            txt_string: A string of the object's size to display.
+            scale (float): The font scale of the text_string.
+        Returns:
+            A tuple of x and y position adjustment factors for size
+            annotation.
+        """
+
+        ((txt_width, _), baseline) = cv2.getTextSize(
+            text=txt_string,
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=scale,
+            thickness=1 #self.image_info['line thickness'],
+        )
+        offset_x = txt_width / 2
+
+        return offset_x, baseline
 
     @staticmethod
     def show_help():
