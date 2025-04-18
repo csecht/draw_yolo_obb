@@ -1115,14 +1115,14 @@ class YoloOBBControl(tk.Tk):
             self.class_entry.delete(first=0, last=tk.END)  # Clear the entry field.
             self.class_entry.insert(index=tk.INSERT, string='0')  # Reset default value.
 
-    def get_labels(self, labels_path: str) -> Union[tuple[list, tuple], None]:
+    def get_labels(self, labels_path: str) -> Union[list, None]:
         """
         Generates label data to be used by the view_labels() method.
         Called from BoxDrawer.look_for_labels().
 
         Args:
              labels_path (str): The path to the YOLO labels file to load.
-        Returns: A tuple of the labels to convert and the image size.
+        Returns: A list of labels to convert.
         """
 
         self.current_image_name.set(
@@ -1164,7 +1164,7 @@ class YoloOBBControl(tk.Tk):
             return None
 
         # Return the labels and the image h,w for conversion by view_labels().
-        return labels_to_convert, box_drawer.image_info['h&w']
+        return labels_to_convert
 
     def on_close(self):
         """
@@ -1194,7 +1194,7 @@ class Utility:
     """
 
     @staticmethod
-    def view_labels(label_data: tuple):
+    def view_labels(label_data: list):
         """
         Provides Box formatting and BoxDrawer display of YOLO object
         detection data. Calls get_labels() to get the data
@@ -1212,7 +1212,8 @@ class Utility:
 
         # Clear existing boxes before adding new ones.
         box_drawer.boxes.clear()
-        labels_to_view, (img_h, img_w) = label_data
+        labels_to_view = label_data
+        img_h, img_w = box_drawer.image_info['h&w']
 
         # Check format of the first line of the labels file to determine
         #  if the data is standard YOLO bounding boxes or OBB boxes
@@ -1391,11 +1392,10 @@ class Utility:
             txt_string: A string of the object's size to display.
             scale (float): The font scale of the text_string.
         Returns:
-            A tuple of x and y position adjustment factors for size
-            annotation.
+            A tuple of x and y position adjustment factors for text centering.
         """
 
-        ((txt_width, _), baseline) = cv2.getTextSize(
+        (txt_width, _), baseline = cv2.getTextSize(
             text=txt_string,
             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
             fontScale=scale,
