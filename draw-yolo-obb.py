@@ -214,6 +214,12 @@ class BoxDrawer:
             'blue': (255, 0, 0),
         }
 
+        self.zoom_level = 1.0
+        self.zoom_step = 0.1  # Same as Linux default
+        self.zoom_center = None  # Mouse position when zooming
+        self.last_mouse_pos = (0, 0)  # Track mouse position
+        self.zoom_key_active = False  # Track if zoom modifier key is pressed
+
     def open_image(self) -> None:
         """
         Reads a new image file for drawing.
@@ -254,8 +260,9 @@ class BoxDrawer:
                 # Check if a labels file exists for the new image.
                 self.look_for_labels(self.image_path)
 
-                # Reset the box counter for the 'b' key.
+                # Reset to defaults.
                 self.b_box_counter = 0
+                self.zoom_level = 1.0
 
             # Re-enable window close button 'X'.
             app.protocol('WM_DELETE_WINDOW', app.on_close)
@@ -386,15 +393,49 @@ class BoxDrawer:
             # Using a copy allows live drawing of boxes.
             display_image = self.image_info['copy'].copy()
 
+            if MY_OS == 'win' and self.zoom_level != 1.0 and self.zoom_center:
+                # Zooms window the up/down arrow keys on Windows.
+                _h, _w = display_image.shape[:2]
+                img_h, img_w = self.image_info['h&w']
+                scale = self.zoom_level
+
+                # Convert mouse position to image coordinates
+                mouse_x, mouse_y = (int(coord * scale) for coord, scale in
+                                    zip(self.zoom_center, (_w / img_w, _h / img_h)))
+
+                # Create transformation matrix centered on the mouse position.
+                t_matrix = np.array([
+                    [scale, 0, (1 - scale) * mouse_x],
+                    [0, scale, (1 - scale) * mouse_y]
+                ]) #, dtype=np.float32)
+
+                # Apply transformation
+                display_image = cv2.warpAffine(
+                    display_image,
+                    M=t_matrix,
+                    dsize=(_w, _h),
+                    flags=cv2.INTER_LINEAR,
+                    borderMode=cv2.BORDER_REFLECT
+                )
+
+                # Transform zoomed box coordinates
+                for _box in self.boxes:
+                    if len(_box.points) == 4:
+                        _box.transformed_points = cv2.transform(_box.points[None, :, :], t_matrix)[0]
+
             for _box in self.boxes:
                 if len(_box.points) == 4:
+                    if MY_OS == 'win' and self.zoom_level != 1.0 and self.zoom_center:
+                        pts = _box.transformed_points
+                    else:
+                        pts = _box.points
 
                     # Highlight active box in red, all others in green.
                     color = (self.cv_font_color['green']
                              if not _box.is_active else self.cv_font_color['red'])
 
                     cv2.polylines(img=display_image,
-                                  pts=[_box.points],
+                                  pts=[pts],
                                   isClosed=True,
                                   color=color,
                                   thickness=self.image_info['line thickness'],
@@ -404,7 +445,7 @@ class BoxDrawer:
                     # Make radius size relative to image size.
                     if _box.is_active:
                         cv2.circle(display_image,
-                                   center=_box.points[2],
+                                   center=pts[2],
                                    radius=self.get_circle_radius(),
                                    color=self.cv_font_color['cyan'],
                                    thickness=cv2.FILLED,
@@ -412,7 +453,7 @@ class BoxDrawer:
 
                     self.put_text_class_index(image=display_image,
                                               class_idx=str(_box.class_index),
-                                              box=_box,
+                                              box_points=pts,
                                               )
 
             cv2.imshow(self.window_name, display_image)
@@ -545,21 +586,35 @@ class BoxDrawer:
                 self.active_box.update_points()
                 self.check_boundaries(self.active_box)
 
-        # Simultaneously increase height and width.
-        if key == up_arrow:
-            if self.active_box and len(self.active_box.points) == 4:
-                self.active_box.height += 1
-                self.active_box.width += 1
-                self.active_box.update_points()
-                self.check_boundaries(self.active_box)
+        if MY_OS == 'lin':
+            # Simultaneously increase height and width.
+            if key == up_arrow:
+                if self.active_box and len(self.active_box.points) == 4:
+                    self.active_box.height += 1
+                    self.active_box.width += 1
+                    self.active_box.update_points()
+                    self.check_boundaries(self.active_box)
 
-        # Simultaneously decrease height and width.
-        if key == down_arrow:
-            if self.active_box and len(self.active_box.points) == 4:
-                self.active_box.height = max(1, self.active_box.height - 1)
-                self.active_box.width = max(1, self.active_box.width - 1)
-                self.set_min_hw(self.min_dim)
-                self.active_box.update_points()
+            # Simultaneously decrease height and width.
+            if key == down_arrow:
+                if self.active_box and len(self.active_box.points) == 4:
+                    self.active_box.height = max(1, self.active_box.height - 1)
+                    self.active_box.width = max(1, self.active_box.width - 1)
+                    self.set_min_hw(self.min_dim)
+                    self.active_box.update_points()
+
+        else:  # is Windows: Handle zoom in/out.
+            if key == up_arrow:  # Zoom in
+                self.zoom_level = min(5.0, self.zoom_level + self.zoom_step)
+
+                # Need to keep zooming active after return to no-zoom.
+                self.zoom_center = self.last_mouse_pos
+
+            elif key == down_arrow:  # Zoom out
+                self.zoom_level = max(1.0, self.zoom_level - self.zoom_step)
+                if self.zoom_level == 1.0:
+                    self.zoom_center = None  # Reset when fully zoomed out
+
 
         # The following layout of keys for manipulating the active box
         #  is based on the QWERTY keyboard layout.
@@ -671,6 +726,11 @@ class BoxDrawer:
 
         # Need to restrict mouse events to the image boundary.
         img_h, img_w = self.image_info['h&w']
+
+        # Store mouse position and center for zoomed image (Windows) for set_keys().
+        #  Allows for zoom panning with mouse motion.
+        self.last_mouse_pos = (x, y)
+        self.zoom_center = (x, y)
 
         # Need to stop dragging if the mouse leaves the image area.
         if x <= 0 or x >= img_w or y <= 0 or y >= img_h:
@@ -822,15 +882,16 @@ class BoxDrawer:
     def put_text_class_index(self,
                              image: np.ndarray,
                              class_idx: str,
-                             box: Box,
+                             box_points: np.array,
                              ) -> None:
         """
-        Annotate the image with the class index for the box.
+        Annotate the image with the class index for the box in the bottom-right
+        corner of the box
         """
 
         # Center the size text in the OBB with the 'org' argument.
         #  org: bottom-left corner of the text annotation for an object.
-        corner_x, corner_y = box.points[2]
+        corner_x, corner_y = box_points[2]
         offset_x, offset_y = Utility.get_text_offsets(
             txt_string=class_idx,
             scale=self.image_info['font scale'],
@@ -892,7 +953,7 @@ class BoxDrawer:
                                    thickness=-1)
                         self.put_text_class_index(result_image,
                                                   class_idx=str(_box.class_index),
-                                                  box=_box)
+                                                  box_points=_box.points)
 
             cv2.imwrite(f"results/{img_name}_result.jpg", result_image)
 

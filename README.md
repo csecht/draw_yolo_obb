@@ -89,7 +89,8 @@ be drawn. The default class index is 0. Enter an index value for a different cla
 
 ##### Keyboard actions for the active box (red box):
 * 'Left' and 'Right' arrow keys rotate the box around its center.
-* 'Up' and 'Down' arrow keys increase or decrease box size.
+* Up and down arrow keys increase or decrease box size in Linux platforms.
+*   In Windows, the up and down keys control the zoom level.
 * 'i', 'k', 'j', and 'l' keys move the box up, down, left, and right.
 * 'e', 'd', 'f', and 's' keys increase or decrease height and width.
 * 'r' key removes the active box.
@@ -118,7 +119,7 @@ The saved annotated image with 47 boxes.
 * Box manipulations are center-oriented, so when initially positioning a box, roughly center it on the object, then adjust rotation, size, and dimensions.
 * When needing a box for a different object class, remember to change the class index in the YOLO OBB Control window before drawing the box.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
-* The OpenCV window manager allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. The 'h' key pops up a help window with keyboard shortcuts.
+* The OpenCV window manager in Linux (Ubuntu) allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. In many Windows systems, the mouse wheel doesn't zoom the image. Zoom functions, however, can be achieved with the up and down arrow keys. 
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
 * Box line may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and thus may overlap the object.
 * If you are right-clicking to draw a box and nothing is happening, remember to first press the 'n' key, then right-click twice to define the opposite corners.
