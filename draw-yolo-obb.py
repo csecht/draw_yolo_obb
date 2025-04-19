@@ -473,18 +473,12 @@ class BoxDrawer:
             right_arrow = 83
             up_arrow = 82
             down_arrow = 84
-            shift = 16
-            equal = 61
-            hyphen = 45
         else:  # 'win'
             key = cv2.waitKeyEx(1)  # for Windows special keys (on HP Pavilion)
             left_arrow = 2424832  # VK_LEFT, 0x25
             right_arrow = 2555904 # VK_RIGHT, 0x27
             up_arrow = 2490368  # VK_UP, 0x26
             down_arrow = 2621440  # VK_DOWN, 0x28
-            shift = 2260480  # VK_SHIFT, 0x10
-            equal = 187 # VK_OEM_PLUS, 0xBB
-            hyphen = 189 # VK_OEM_MINUS, 0xBD
 
         # Need image height and width for positioning boxes with the 'b' key.
         display_img_h, display_img_w = self.image_info['h&w']
@@ -513,19 +507,25 @@ class BoxDrawer:
         if key == ord("b"):
             if self.active_box:
                 self.active_box.is_active = False
-            # Provide a progressive offset for each new box.
+
+            # Increment box counter and calculate offset for new box
             self.b_box_counter += 1
-            x = round(display_img_w * 0.03) + (self.b_box_counter * 5)
-            y = round(display_img_h * 0.03) + (self.b_box_counter * 5)
-            self.boxes.append(Box(class_index=self.current_class_index,
-                                  points=[(x, y), (x + 150, y + 150)],
-                                  rotation_angle=0))
-            self.boxes[-1].update_properties()
-            self.boxes[-1].update_points()
-            self.boxes[-1].is_active = True
-            self.active_box = self.boxes[-1]
-            for _box in self.boxes[:-1]:
-                _box.is_active = False
+            offset = self.b_box_counter * 5
+            x, y = round(display_img_w * 0.03) + offset, round(display_img_h * 0.03) + offset
+
+            # Create and activate the new box
+            new_box = Box(class_index=self.current_class_index,
+                          points=[(x, y), (x + 150, y + 150)],
+                          rotation_angle=0)
+            new_box.update_properties()
+            new_box.update_points()
+            new_box.is_active = True
+            self.boxes.append(new_box)
+            self.active_box = new_box
+
+            # Deactivate all other boxes
+            for box in self.boxes[:-1]:
+                box.is_active = False
 
         # Press 'c' to clone (copy and paste) the active box.
         if key == ord("c"):
@@ -533,7 +533,7 @@ class BoxDrawer:
 
                 # Need to offset the cloned points to avoid overlap, and
                 #  move away from a nearby image edge.
-                offset_points: np.array = self.active_box.points.copy()
+                offset_points: np.ndarray = self.active_box.points.copy()
                 right_side, bottom_side = offset_points[2]
 
                 # Determine the edge offset based on the position of the box.
@@ -572,8 +572,7 @@ class BoxDrawer:
         if key == left_arrow:
             if self.active_box and len(self.active_box.points) == 4:
                 self.active_box.rotation_angle -= angle_increment
-                if self.active_box.rotation_angle <= -180:
-                    self.active_box.rotation_angle = -180
+                self.active_box.rotation_angle = max(self.active_box.rotation_angle, -180)
                 self.active_box.update_points()
                 self.check_boundaries(self.active_box)
 
@@ -581,8 +580,7 @@ class BoxDrawer:
         if key == right_arrow:
             if self.active_box and len(self.active_box.points) == 4:
                 self.active_box.rotation_angle += angle_increment
-                if self.active_box.rotation_angle >= 180:
-                    self.active_box.rotation_angle = 180
+                self.active_box.rotation_angle = min(self.active_box.rotation_angle, 180)
                 self.active_box.update_points()
                 self.check_boundaries(self.active_box)
 
@@ -611,9 +609,9 @@ class BoxDrawer:
                 self.zoom_center = self.last_mouse_pos
 
             elif key == down_arrow:  # Zoom out
+                # Reset when fully zoomed out.
                 self.zoom_level = max(1.0, self.zoom_level - self.zoom_step)
-                if self.zoom_level == 1.0:
-                    self.zoom_center = None  # Reset when fully zoomed out
+                self.zoom_center = None if self.zoom_level == 1.0 else self.last_mouse_pos
 
 
         # The following layout of keys for manipulating the active box
@@ -689,7 +687,7 @@ class BoxDrawer:
 
     def check_boundaries(self, box: Optional[Box]) -> None:
         """
-        Check if the box is within the image boundaries and adjust its
+        Check if the *box* is within the image boundaries and adjust its
         position if necessary.
         """
         img_h, img_w = self.image_info['h&w']
@@ -882,7 +880,7 @@ class BoxDrawer:
     def put_text_class_index(self,
                              image: np.ndarray,
                              class_idx: str,
-                             box_points: np.array,
+                             box_points: np.ndarray,
                              ) -> None:
         """
         Annotate the image with the class index for the box in the bottom-right
@@ -1121,7 +1119,7 @@ class YoloOBBControl(tk.Tk):
         Called from BoxDrawer.look_for_labels().
 
         Args:
-             labels_path (str): The path to the YOLO labels file to load.
+             labels_path: (string) The path to the YOLO labels file to load.
         Returns: A list of labels to convert.
         """
 
@@ -1390,7 +1388,7 @@ class Utility:
 
         Args:
             txt_string: A string of the object's size to display.
-            scale (float): The font scale of the text_string.
+            scale: (float) The font scale of the text_string.
         Returns:
             A tuple of x and y position adjustment factors for text centering.
         """
