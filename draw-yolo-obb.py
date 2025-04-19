@@ -695,22 +695,17 @@ class BoxDrawer:
         img_h, img_w = self.image_info['h&w']
 
         # Calculate the bounding box of the rotated rectangle
-        min_x = min(point[0] for point in box.points)
-        max_x = max(point[0] for point in box.points)
-        min_y = min(point[1] for point in box.points)
-        max_y = max(point[1] for point in box.points)
+        min_x, max_x = np.min(box.points[:, 0]), np.max(box.points[:, 0])
+        min_y, max_y = np.min(box.points[:, 1]), np.max(box.points[:, 1])
 
         # Calculate the amount to shift the box to keep it within the image boundaries.
-        shift_x = max(0, -min_x) if min_x < 0 else min(0, img_w - 1 - max_x)
-        shift_y = max(0, -min_y) if min_y < 0 else min(0, img_h - 1 - max_y)
+        shift_x = -min_x if min_x < 0 else min(0, img_w - 1 - max_x)
+        shift_y = -min_y if min_y < 0 else min(0, img_h - 1 - max_y)
 
-        # Shift the box points
-        if shift_x != 0 or shift_y != 0:
-            # Need to keep all corner points within the image boundaries.
+        # Update the center and shift the box points, as needed
+        if shift_x or shift_y:
             box.center = (box.center[0] + shift_x, box.center[1] + shift_y)
-            for i, (x, y) in enumerate(box.points):
-                box.points[i] = (x + shift_x, y + shift_y)
-
+            box.points += [shift_x, shift_y]
             box.update_points()
 
     def handle_mouse_events(self, event, x, y, *args) -> None:
@@ -743,8 +738,7 @@ class BoxDrawer:
             # Check if the user clicked near the bottom-right corner of the active box.
             if self.active_box and len(self.active_box.points) == 4:
                 corner_x, corner_y = self.active_box.points[2]
-                click_area = self.get_circle_radius()
-                if abs(corner_x - x) < click_area and abs(corner_y - y) < click_area:
+                if np.hypot(corner_x - x, corner_y - y) < self.get_circle_radius():
                     self.is_dragging_corner = True
 
             # Check if the user clicked inside any box to make it active.
@@ -759,10 +753,9 @@ class BoxDrawer:
                     self.offset = (x - _box.center[0], y - _box.center[1])
                     break
 
-            # Check if the user clicked on the image outside all boxes and
-            #  not in an active drag corner.
+            # Deactivate the active box if the click is outside all boxes.
             if (self.is_point_outside_all_boxes(point=(x, y), boxes=self.boxes) and
-                 self.is_dragging_corner is False):
+                 not self.is_dragging_corner):
                 if self.active_box:
                     self.active_box.is_active = False
                 self.active_box = None
@@ -805,23 +798,21 @@ class BoxDrawer:
                 dx_rot = dx * np.cos(-angle_rad) - dy * np.sin(-angle_rad)
                 dy_rot = dx * np.sin(-angle_rad) + dy * np.cos(-angle_rad)
 
-                # Update the box width and height, ensuring minimum dimensions
+                # Update the box width and height, ensuring minimum dimensions.
+                cx, cy = self.active_box.center
                 new_width = max(2 * abs(dx_rot), self.min_dim)
                 new_height = max(2 * abs(dy_rot), self.min_dim)
 
-                # Check if the new width or height would exceed the image boundaries.
-                if (self.active_box.center[0] - new_width / 2 < 0 or
-                    self.active_box.center[0] + new_width / 2 >= img_w or
-                    self.active_box.center[1] - new_height / 2 < 0 or
-                    self.active_box.center[1] + new_height / 2 >= img_h):
-                    return
+                # Use new properties when they don't exceed the image boundaries.
+                if not (cx - new_width / 2 < 0 or
+                        cx + new_width / 2 >= img_w or
+                        cy - new_height / 2 < 0 or
+                        cy + new_height / 2 >= img_h):
 
-                self.active_box.width = new_width
-                self.active_box.height = new_height
-
-                # Update the box points.
-                self.active_box.update_points()
-                self.check_boundaries(self.active_box)
+                    self.active_box.width = new_width
+                    self.active_box.height = new_height
+                    self.active_box.update_points()
+                    self.check_boundaries(self.active_box)
 
             elif (self.is_dragging_box and
                   self.active_box and
