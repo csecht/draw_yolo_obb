@@ -56,11 +56,11 @@ with Esc or its window close button, 'X'.
 """
 
 # Standard imports
-import tkinter as tk
 import sys
-from pathlib import Path
 import threading
-from signal import signal, SIGINT
+import tkinter as tk
+
+from pathlib import Path
 from tkinter import messagebox, filedialog
 from tkinter.scrolledtext import ScrolledText
 from typing import Optional, Union

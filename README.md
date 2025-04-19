@@ -38,7 +38,7 @@ pip install opencv-python numpy --user
 ```
 To avoid problems with version dependencies, please consider setting up a new virtual environment as described below.
 
-Program development environments were Linux Ubuntu 24.04 with Python 3.12 and Windows 11 with Python 3.11.
+Program development environments were Linux Ubuntu 24.04, Python 3.12 and Windows 11, Python 3.11; both with opencv-python 4.11. Have not yet gotten these versions to work in macOS.
 
 ### Usage:
 
