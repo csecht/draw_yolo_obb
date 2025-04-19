@@ -139,7 +139,7 @@ https://chat.mistral.ai/chat
 
 https://chat.deepseek.com
 
-and GitHub Copilot in the PyCharm IDE.
+and GitHub Copilot https://github.com/features/copilot in the PyCharm IDE.
 
 The start image is P0861__1024__0___1648.jpg from the DOTA8 dataset, which is available at:
 https://github.com/ultralytics/assets/releases/download/v0.0.0/dota8.zip
