@@ -409,7 +409,7 @@ class BoxDrawer:
                 t_matrix = np.array([
                     [scale, 0, (1 - scale) * mouse_x],
                     [0, scale, (1 - scale) * mouse_y]
-                ]) #, dtype=np.float32)
+                ])  #, dtype=np.float32)
 
                 # Apply transformation
                 display_image = cv2.warpAffine(
@@ -727,10 +727,10 @@ class BoxDrawer:
         # Need to restrict mouse events to the image boundary.
         img_h, img_w = self.image_info['h&w']
 
-        # Store mouse position and center for zoomed image (Windows) for set_keys().
-        #  Allows for zoom panning with mouse motion.
+        # Store mouse position for zoomed image (Windows) function in set_keys().
+        # Moving self.zoom_center = (x, y) from the cv2.EVENT_LBUTTONUP event to
+        #  here would allow panning with mouse movement.
         self.last_mouse_pos = (x, y)
-        self.zoom_center = (x, y)
 
         # Need to stop dragging if the mouse leaves the image area.
         if x <= 0 or x >= img_w or y <= 0 or y >= img_h:
@@ -836,6 +836,7 @@ class BoxDrawer:
         elif event == cv2.EVENT_LBUTTONUP:
             self.is_dragging_corner = False
             self.is_dragging_box = False
+            self.zoom_center = (x, y)
 
     def is_point_inside_box(self, point: tuple, box_points: np.ndarray) -> bool:
         """
