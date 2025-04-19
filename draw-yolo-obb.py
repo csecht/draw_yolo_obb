@@ -29,13 +29,15 @@ entered will be used for all subsequent boxes until changes. Class index
 numbers are displayed in the box's corner with the drag dot.
 
 Keyboard manipulation of the active box:
-The 'Left' and 'Right' arrow keys rotate the box in 3 degree increments.
-The 'Up' and 'Down' arrow keys increase or decrease the box size.
+The left and right arrow keys rotate the box in 3 degree increments.
+The up and down arrow keys increase or decrease the box size in Linux.
 The 'i', 'k', 'j', and 'l' keys move the box up, down, left, and right.
 The 'e', 'd', 'f', and 's' keys increase or decrease height and width.
 The 'r' key removes the active (red) box.
 
 Program control keys:
+The up and down arrow keys zoom the image in and out in Windows.
+The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
 The 'X' button in the control window bar quits the program.
 The 'h' key, from the image window, pops up a scrolling help window.
@@ -49,7 +51,7 @@ reposition windows as needed.
 
 Clicking the image window's 'X' button will not end the program, it just
 redraws the window. Quit the program from the YOLO OBB Control window
-with Esc or the window close button, 'X'.
+with Esc or its window close button, 'X'.
 -- END OF USAGE INFO --
 """
 
