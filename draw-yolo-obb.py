@@ -105,19 +105,18 @@ class Box:
 
         # Clip points to ensure they are within image boundaries
         self.points = np.clip(self.points, a_min=[0, 0], a_max=[img_w - 1, img_h - 1])
+        self.center = np.mean(self.points, axis=0)
 
         if len(self.points) == 2:
-            # Axially oriented box: calculate center, width, and height.
-            self.center = tuple(np.mean(self.points, axis=0).astype(int))
+            # Axially oriented box.
             self.width, self.height = np.abs(self.points[1] - self.points[0])
 
         elif len(self.points) == 4:
-            # Rotated box: calculate center, width, and height.
+            # Rotated box.
             # Rotate points to align with axes for width and height calculation.
             # The `None` indexing adds a third dimension to the array for
             # `cv2.transform`. The `[0]` indexing extracts the transformed
             # points to re-form a 2D array with new corner coordinates.
-            self.center = tuple(np.mean(self.points, axis=0))
             rotation_matrix = cv2.getRotationMatrix2D(
                 self.center, self.rotation_angle, scale=1)
             rotated_points = cv2.transform(
@@ -741,11 +740,11 @@ class BoxDrawer:
                      not self.is_dragging_corner):
                     if self.active_box:
                         self.active_box.is_active = False
-                    self.active_box = None
+                        self.active_box = None
 
             elif event == cv2.EVENT_RBUTTONDOWN:
-                # Start drawing a new box with the right mouse button
-                # Store the start point for the drag operation
+                # Start drawing a new box with the right mouse button.
+                # Store the start point for the drag operation.
                 self.start_point = (x, y)
 
                 # Create a new Box to be drawn
@@ -1143,8 +1142,12 @@ class YoloOBBControl(tk.Tk):
         self.current_image_name.set(
             f"Current image: {box_drawer.image_info['full name']}")
 
-        with open(labels_path, 'r') as labels:
-            labels_to_convert: list = labels.readlines()
+        try:
+            with open(labels_path, 'r') as labels:
+                labels_to_convert = labels.readlines()
+        except FileNotFoundError:
+            messagebox.showerror(title='File not found', message=f'{labels_path} does not exist.')
+            return None
 
         if not labels_to_convert:
             messagebox.showerror(
@@ -1155,14 +1158,13 @@ class YoloOBBControl(tk.Tk):
             return None
 
         for line, label in enumerate(labels_to_convert):
-            for dat in label.split()[1:]:
-                if not label.split()[0].isdigit():
-                    messagebox.showerror(
-                        title='Bad class index',
-                        detail='The class index must be an integer.\n'
-                               f'Please check line: {line +1}'
-                    )
-                    return None
+            if not label.split()[0].isdigit():
+                messagebox.showerror(
+                    title='Bad class index',
+                    detail='The class index must be an integer.\n'
+                           f'Check line: {line +1}. No boxes were drawn.\n'
+                )
+                return None
 
         # Now check the first line for expected number of data elements.
         if not len(labels_to_convert[0].split()) in (5, 9):
@@ -1170,15 +1172,12 @@ class YoloOBBControl(tk.Tk):
                 title='Bad input format',
                 detail=f'{Path(labels_path).name} cannot be used.\n'
                        'Expect either 5 or 9 data elements per line.\n'
-                       'Only label data; no comments, no headers.\n'
-                       'Object detection labels from yolo modeling:'
-                       '  class_index center-x center-y w h\n'
-                       'Labels from yolo-obb modeling:'
-                       '  class_index x1 y1 x2 y2 x3 y3 x4 y4\n'
+                       '  - YOLO: class_index center-x center-y w h\n'
+                       '  - YOLO-OBB: class_index x1 y1 x2 y2 x3 y3 x4 y4\n'
+                       'Only label data; no comments, no headers.'
             )
             return None
 
-        # Return the labels and the image h,w for conversion by view_labels().
         return labels_to_convert
 
     def on_close(self):
@@ -1360,8 +1359,8 @@ class Utility:
 
         # Calculate rotation angle in radians
         angle_rad = np.arctan2(
-            points[1][1] - points[0][1],
-            points[1][0] - points[0][0]
+            points[1][1] - points[0][1],  # y2 - y1 vector
+            points[1][0] - points[0][0]  # x2 - x1 vector
         )
 
         # Make and apply the rotation matrix shift.
@@ -1411,7 +1410,7 @@ class Utility:
             text=txt_string,
             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
             fontScale=scale,
-            thickness=1 #self.image_info['line thickness'],
+            thickness=1,
         )
         offset_x = txt_width / 2
 
