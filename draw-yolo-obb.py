@@ -761,19 +761,22 @@ class BoxDrawer:
                 self.active_box = None
 
         elif event == cv2.EVENT_RBUTTONDOWN:
-            # If no box is active, start drawing a new box. Two rt-clicks
-            #  set the top-left and bottom-right corners of a new box.
 
-            # New box starts with default points, [[0, 0], [0, 0]].
-            # Sum the values of points in the new box, self.boxes[-1],
-            #  to evaluate both coordinate sets in the points array.
+            # If no box is active, start drawing a new box following 'r'
+            #  keypress. Two rt-clicks set the top-left and bottom-right
+            #  corners of a new box.
+            # New box starts with default points array, [[0, 0], [0, 0]].
+            # Check if we have a newly created box with zero coordinates.
             if (not self.active_box and len(self.boxes) > 0 and
-                    any(sum(point) == 0 for point in self.boxes[-1].points)):
-                for i, point in enumerate(self.boxes[-1].points):
-                    if sum(point) == 0:
-                        self.boxes[-1].points[i] = [x, y]
-                        break
-                if all(sum(point) > 0 for point in self.boxes[-1].points):
+                    np.any(np.sum(self.boxes[-1].points, axis=1) == 0)):
+
+                # Find the first zero point and set it to the click position
+                zero_indices = np.where(np.sum(self.boxes[-1].points, axis=1) == 0)[0]
+                if zero_indices.size > 0:
+                    self.boxes[-1].points[zero_indices[0]] = np.array([x, y])
+
+                # If all points are now non-zero, finalize the box
+                if np.all(np.sum(self.boxes[-1].points, axis=1) > 0):
                     self.boxes[-1].update_properties()
                     self.boxes[-1].update_points()
                     self.boxes[-1].is_active = True
@@ -827,7 +830,7 @@ class BoxDrawer:
         elif event == cv2.EVENT_LBUTTONUP:
             self.is_dragging_corner = False
             self.is_dragging_box = False
-            self.zoom_center = (x, y)
+            self.zoom_center = (x, y)  # Used for Windows zooming in set_keys().
 
     def is_point_inside_box(self, point: tuple, box_points: np.ndarray) -> bool:
         """
