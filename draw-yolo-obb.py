@@ -11,8 +11,7 @@ a button on the YOLO OBB Control window.
 There are three ways to draw a box:
 Option 1: Click on the image and press 'b' to place a small box near the
 top-left corner of the image.
-Option 2: Click on the image, press 'n', then right-click two points to
-define the top-left and bottom-right corners of the box.
+Option 2: Right-click and drag to draw a new box anywhere in the image.
 Option 3: Click on an existing box, press 'c' to clone it, then drag the
 new box to a new location.
 
@@ -23,10 +22,10 @@ in red, inactive boxes in green. Only an active box can be manipulated
 with the mouse or keyboard.
 
 Use the YOLO OBB Control window to enter a class index for the box to
-be drawn. The default class index is 0. Enter the index for a new class
-index BEFORE clicking the image and pressing 'n' or 'b'. The number
-entered will be used for all subsequent boxes until changes. Class index
-numbers are displayed in the box's corner with the drag dot.
+be drawn. The default class index is 0. Enter an index value for a
+different class BEFORE creating a new box. The number entered will be
+ used for subsequent boxes until changed. The class index number is
+ displayed in a box's drag corner.
 
 Keyboard manipulation of the active box:
 The left and right arrow keys rotate the box in 3 degree increments.
@@ -41,9 +40,6 @@ The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
 The 'X' button in the control window bar quits the program.
 The 'h' key, from the image window, pops up a scrolling help window.
-
-If you are rt-clicking to draw a box and nothing is happening, remember
-to first press the 'n' key, then right-click on two positions.
 
 The terminal window provides feedback on save actions and errors. It may
 be covered by the main image window that fills most of the screen, so
@@ -197,6 +193,8 @@ class BoxDrawer:
         self.active_box = None  # Currently active box
         self.is_dragging_corner = False  # Tracks if a corner is being dragged
         self.is_dragging_box = False  # Tracks if the entire box is being dragged
+        self.is_dragging_new_box = False  # Tracks if rt-click drawing a new box.
+        self.start_point = (0, 0)  # Start coortinate to draw a new box.
         self.offset = (0, 0)  # Offset for dragging the entire box
         self.b_box_counter = 0  # Counter for 'b' key presses
         self.current_class_index = 0
@@ -482,25 +480,15 @@ class BoxDrawer:
             up_arrow = 2490368  # VK_UP, 0x26
             down_arrow = 2621440  # VK_DOWN, 0x28
 
-        # Need image height and width for positioning boxes with the 'b' key.
+        # Need image height and width for positioning boxes for the 'b'
+        #  and 'c' key presses.
         display_img_h, display_img_w = self.image_info['h&w']
 
-        # DEV: if changed, needs to be a factor of 360 rotation.
+        # DEV: if changed, needs to be a factor of 360 degrees of rotation.
         angle_increment = 1
 
-        # Note: key functions require the cv2 window to be in focus (click image).
+        # Note: key functions require the cv2 window to have focus (click image).
         # Note: current_class_index is set in YoloOBBControl.set_class_index().
-
-        # Press 'n' to start a new box when placing a box with two right button
-        #  clicks. The two coordinates are used to define the top-left and
-        #  bottom-right corners of the box, which are processed in
-        #  handle_mouse_events() for the new boxes.points array.
-        if key == ord("n"):
-            self.active_box = None
-            self.boxes.append(Box(class_index=self.current_class_index))
-            self.boxes[-1].is_active = True
-            for _box in self.boxes[:-1]:
-                _box.is_active = False
 
         # Auto-draw a new box near the top-left corner of the image.
         #  Pressing 'b' multiple times will overlay each new box.
@@ -531,7 +519,7 @@ class BoxDrawer:
 
         # Press 'c' to clone (copy and paste) the active box.
         if key == ord("c"):
-            if self.active_box:  # len(self.active_box.points) == 4
+            if self.active_box:
 
                 # Need to offset the cloned points to avoid overlap, and
                 #  move away from a nearby image edge.
@@ -550,7 +538,7 @@ class BoxDrawer:
                 offset_points += offset
 
                 # Note that here four points are used, not two as
-                #  with the 'b' or 'n' keys. Rotated points will be
+                #  with the 'b' keypress. Rotated points will be
                 #  transformed in the Box class methods to preserve box
                 #  properties.
                 cloned_box = Box(class_index=self.active_box.class_index,
@@ -709,128 +697,162 @@ class BoxDrawer:
             box.update_points()
 
     def handle_mouse_events(self, event, x, y, *args) -> None:
-        """
-        Handle mouse events for drawing and manipulating boxes.
-        The EVENT_ handler expects 5 parameters by default, but only
-        three are needed for this application.
-        :param event: The mouse event type (e.g., click, move).
-        :param x: The x-coordinate of the mouse cursor.
-        :param y: The y-coordinate of the mouse cursor.
-        :param args: Unused threading.Event arguments for *flags* and *params*.
-        """
+            """
+            Handle mouse events for drawing and manipulating boxes.
+            The EVENT_ handler expects 5 parameters by default, but only
+            three are needed for this application.
+            :param event: The mouse event type (e.g., click, move).
+            :param x: The x-coordinate of the mouse cursor.
+            :param y: The y-coordinate of the mouse cursor.
+            :param args: Unused threading.Event arguments for *flags* and *params*.
+            """
 
-        # Need to restrict mouse events to the image boundary.
-        img_h, img_w = self.image_info['h&w']
+            # Store mouse position for zoomed image (Windows) function in set_keys().
+            self.last_mouse_pos = (x, y)
 
-        # Store mouse position for zoomed image (Windows) function in set_keys().
-        # Moving self.zoom_center = (x, y) from the cv2.EVENT_LBUTTONUP event to
-        #  here would allow panning with mouse movement.
-        self.last_mouse_pos = (x, y)
+            # Need to stop dragging if the mouse leaves the image area.
+            img_h, img_w = self.image_info['h&w']
+            if x <= 0 or x >= img_w or y <= 0 or y >= img_h:
+                self.is_dragging_box = False
+                self.is_dragging_corner = False
+                return
 
-        # Need to stop dragging if the mouse leaves the image area.
-        if x <= 0 or x >= img_w or y <= 0 or y >= img_h:
-            self.is_dragging_box = False
-            self.is_dragging_corner = False
-            return
+            if event == cv2.EVENT_LBUTTONDOWN:
+                # Check if the user clicked near the bottom-right corner of the active box.
+                if self.active_box and len(self.active_box.points) == 4:
+                    corner_x, corner_y = self.active_box.points[2]
+                    if np.hypot(corner_x - x, corner_y - y) < self.get_circle_radius():
+                        self.is_dragging_corner = True
 
-        if event == cv2.EVENT_LBUTTONDOWN:
+                # Check if the user clicked inside any box to make it active.
+                for _box in reversed(self.boxes):  # self.boxes[::-1]
+                    if (len(_box.points) == 4 and
+                            self.is_point_inside_box(point=(x, y), box_points=_box.points)):
+                        if self.active_box:
+                            self.active_box.is_active = False
+                        _box.is_active = True
+                        self.active_box = _box
+                        self.is_dragging_box = True
+                        self.offset = (x - _box.center[0], y - _box.center[1])
+                        break
 
-            # Check if the user clicked near the bottom-right corner of the active box.
-            if self.active_box and len(self.active_box.points) == 4:
-                corner_x, corner_y = self.active_box.points[2]
-                if np.hypot(corner_x - x, corner_y - y) < self.get_circle_radius():
-                    self.is_dragging_corner = True
-
-            # Check if the user clicked inside any box to make it active.
-            for _box in reversed(self.boxes):  # self.boxes[::-1]
-                if (len(_box.points) == 4 and
-                        self.is_point_inside_box(point=(x, y), box_points=_box.points)):
+                # Deactivate the active box if the click is outside all boxes.
+                if (self.is_point_outside_all_boxes(point=(x, y), boxes=self.boxes) and
+                     not self.is_dragging_corner):
                     if self.active_box:
                         self.active_box.is_active = False
-                    _box.is_active = True
-                    self.active_box = _box
-                    self.is_dragging_box = True
-                    self.offset = (x - _box.center[0], y - _box.center[1])
-                    break
+                    self.active_box = None
 
-            # Deactivate the active box if the click is outside all boxes.
-            if (self.is_point_outside_all_boxes(point=(x, y), boxes=self.boxes) and
-                 not self.is_dragging_corner):
+            elif event == cv2.EVENT_RBUTTONDOWN:
+                # Start drawing a new box with the right mouse button
+                # Store the start point for the drag operation
+                self.start_point = (x, y)
+
+                # Create a new Box to be drawn
                 if self.active_box:
                     self.active_box.is_active = False
-                self.active_box = None
 
-        elif event == cv2.EVENT_RBUTTONDOWN:
+                new_box = Box(class_index=self.current_class_index)
+                new_box.is_active = True
+                new_box.points = np.array([
+                    [x, y],  # Start point
+                    [x, y],  # Initialize with the same point
+                    [x, y],  # Will update during drag
+                    [x, y]   # Will update during drag
+                ])
+                self.boxes.append(new_box)
+                self.active_box = new_box
+                self.is_dragging_new_box = True
 
-            # If no box is active, start drawing a new box following 'r'
-            #  keypress. Two rt-clicks set the top-left and bottom-right
-            #  corners of a new box.
-            # New box starts with default points array, [[0, 0], [0, 0]].
-            # Check if we have a newly created box with zero coordinates.
-            if (not self.active_box and len(self.boxes) > 0 and
-                    np.any(np.sum(self.boxes[-1].points, axis=1) == 0)):
+            elif event == cv2.EVENT_RBUTTONUP:
+                # Finish drawing the new box when right mouse button is released
+                if hasattr(self, 'is_dragging_new_box') and self.is_dragging_new_box:
+                    # Finalize the box if it has a minimum size
+                    if (abs(x - self.start_point[0]) > self.min_dim and
+                        abs(y - self.start_point[1]) > self.min_dim):
 
-                # Find the first zero point and set it to the click position
-                zero_indices = np.where(np.sum(self.boxes[-1].points, axis=1) == 0)[0]
-                if zero_indices.size > 0:
-                    self.boxes[-1].points[zero_indices[0]] = np.array([x, y])
+                        # Create box with standard format (top-left, bottom-right points)
+                        top_left = (min(x, self.start_point[0]), min(y, self.start_point[1]))
+                        bottom_right = (max(x, self.start_point[0]), max(y, self.start_point[1]))
 
-                # If all points are now non-zero, finalize the box
-                if np.all(np.sum(self.boxes[-1].points, axis=1) > 0):
-                    self.boxes[-1].update_properties()
-                    self.boxes[-1].update_points()
-                    self.boxes[-1].is_active = True
-                    self.active_box = self.boxes[-1]
+                        self.active_box.points = np.array([
+                            top_left,
+                            [bottom_right[0], top_left[1]],
+                            bottom_right,
+                            [top_left[0], bottom_right[1]]
+                        ])
 
-        elif event == cv2.EVENT_MOUSEMOVE:
+                        self.active_box.update_properties()
+                        self.active_box.update_points()
+                        self.check_boundaries(self.active_box)
+                    else:
+                        # Box is too small, remove it
+                        self.boxes.pop()
+                        self.active_box = None
 
-            # Resize the active box by dragging the bottom-right corner.
-            if (self.is_dragging_corner and
-                    self.active_box and
-                    len(self.active_box.points) == 4):
+                    self.is_dragging_new_box = False
 
-                # Need to keep the center fixed while dragging the corner.
-                dx = x - self.active_box.center[0]
-                dy = y - self.active_box.center[1]
+            elif event == cv2.EVENT_MOUSEMOVE:
+                # Resize the active box by dragging the bottom-right corner.
+                if (self.is_dragging_corner and
+                        self.active_box and
+                        len(self.active_box.points) == 4):
 
-                # Rotate the dragged point back to the unrotated coordinate system.
-                angle_rad = np.radians(self.active_box.rotation_angle)
+                    # Need to keep the center fixed while dragging the corner.
+                    dx = x - self.active_box.center[0]
+                    dy = y - self.active_box.center[1]
 
-                # Apply the inverse rotation to the dx and dy values to get the
-                #  coordinates in the unrotated coordinate system.
-                dx_rot = dx * np.cos(-angle_rad) - dy * np.sin(-angle_rad)
-                dy_rot = dx * np.sin(-angle_rad) + dy * np.cos(-angle_rad)
+                    # Rotate the dragged point back to the unrotated coordinate system.
+                    angle_rad = np.radians(self.active_box.rotation_angle)
 
-                # Update the box width and height, ensuring minimum dimensions.
-                cx, cy = self.active_box.center
-                new_width = max(2 * abs(dx_rot), self.min_dim)
-                new_height = max(2 * abs(dy_rot), self.min_dim)
+                    # Apply the inverse rotation to the dx and dy values to get the
+                    #  coordinates in the unrotated coordinate system.
+                    dx_rot = dx * np.cos(-angle_rad) - dy * np.sin(-angle_rad)
+                    dy_rot = dx * np.sin(-angle_rad) + dy * np.cos(-angle_rad)
 
-                # Use new properties when they don't exceed the image boundaries.
-                if not (cx - new_width / 2 < 0 or
-                        cx + new_width / 2 >= img_w or
-                        cy - new_height / 2 < 0 or
-                        cy + new_height / 2 >= img_h):
+                    # Update the box width and height, ensuring minimum dimensions.
+                    cx, cy = self.active_box.center
+                    new_width = max(2 * abs(dx_rot), self.min_dim)
+                    new_height = max(2 * abs(dy_rot), self.min_dim)
 
-                    self.active_box.width = new_width
-                    self.active_box.height = new_height
+                    # Use new properties when they don't exceed the image boundaries.
+                    if not (cx - new_width / 2 < 0 or
+                            cx + new_width / 2 >= img_w or
+                            cy - new_height / 2 < 0 or
+                            cy + new_height / 2 >= img_h):
+
+                        self.active_box.width = new_width
+                        self.active_box.height = new_height
+                        self.active_box.update_points()
+                        self.check_boundaries(self.active_box)
+
+                # Move the entire active box.
+                elif (self.is_dragging_box and
+                      self.active_box and
+                      len(self.active_box.points) == 4):
+                    dx = x - self.offset[0]
+                    dy = y - self.offset[1]
+                    self.active_box.center = (dx, dy)
                     self.active_box.update_points()
                     self.check_boundaries(self.active_box)
 
-            elif (self.is_dragging_box and
-                  self.active_box and
-                  len(self.active_box.points) == 4):
-                # Move the entire active box.
-                dx = x - self.offset[0]
-                dy = y - self.offset[1]
-                self.active_box.center = (dx, dy)
-                self.active_box.update_points()
-                self.check_boundaries(self.active_box)
+                # Update the box during right-button drag to create a new box.
+                elif hasattr(self, 'is_dragging_new_box') and self.is_dragging_new_box:
+                    # Update the box in real-time during drag
+                    top_left = (min(x, self.start_point[0]), min(y, self.start_point[1]))
+                    bottom_right = (max(x, self.start_point[0]), max(y, self.start_point[1]))
 
-        elif event == cv2.EVENT_LBUTTONUP:
-            self.is_dragging_corner = False
-            self.is_dragging_box = False
-            self.zoom_center = (x, y)  # Used for Windows zooming in set_keys().
+                    self.active_box.points = np.array([
+                        top_left,
+                        [bottom_right[0], top_left[1]],
+                        bottom_right,
+                        [top_left[0], bottom_right[1]]
+                    ])
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                self.is_dragging_corner = False
+                self.is_dragging_box = False
+                self.zoom_center = (x, y)  # Used for Windows zooming in set_keys().
 
     def is_point_inside_box(self, point: tuple, box_points: np.ndarray) -> bool:
         """
@@ -909,10 +931,8 @@ class BoxDrawer:
         Called from the 'Save' button in YoloOBBControl.config_control_window()
         """
         with self.control_lock:
-            # Each time 'n' is pressed, an empty points array is appended to
-            #  the boxes list before any box is drawn. Multiple 'n' presses
-            #  will append multiple 2-point 0,0 arrays to it. So, need to remove
-            #  all non-4-point elements for an accurate count of drawn boxes.
+            # Need to remove any non-4-point elements for an accurate box count.
+            #  This may not be necessary, but it is a good practice.
             self.boxes = [_box for _box in self.boxes if len(_box.points) == 4]
 
             if not self.boxes:
