@@ -38,7 +38,7 @@ pip install opencv-python numpy --user
 ```
 To avoid problems with version dependencies, please consider setting up a new virtual environment as described below.
 
-Program development environments were Linux Ubuntu 24.04, Python 3.12 and Windows 11, Python 3.11; both with opencv-python 4.11. Have not yet gotten these versions to work in macOS.
+Program development environments were Linux Ubuntu 24.04, Python 3.12 and Windows 11, Python 3.11; both with opencv-python 4.11. Have not yet gotten these versions to work in macOS with M-class CPU. Keyboard shortcuts in Windows were set using a HP Pavillion laptop and are not yet tested across Windows systems.
 
 ### Usage:
 
@@ -76,7 +76,7 @@ There are three ways to draw an oriented bounding box.
 
 Option 1: Click on the image and press 'b'. This places a small square box near the top-left corner of the image. The new box can be dragged to the desired location.
 
-Option 2: Click on the image, press 'n', then right-click twice anywhere in the image to define opposite corners of a new box.
+Option 2: Right-click and drag to draw a new box anywhere in the image.
 
 Option 3: Click on an existing box to activate it, press 'c' to clone it, then drag the new active box to reposition.
 
@@ -85,7 +85,7 @@ Option 3: Click on an existing box to activate it, press 'c' to clone it, then d
 To move and reshape a box, click inside it to activate (shows as red), then drag to reposition. Click and drag the corner dot to resize. (The dot highlights the entered class index.) Or move and resize using the keyboard, as described below. An active box is red, inactive boxes are green. Only an active box can be manipulated with the keyboard.
 
 Use the YOLO OBB Control window to enter a class index for the box to
-be drawn. The default class index is 0. Enter an index value for a different class BEFORE clicking the image and pressing 'n' or 'b'. The number entered will be used for subsequent boxes until changed. The class index number is displayed in a box's drag corner.
+be drawn. The default class index is 0. Enter an index value for a different class BEFORE creating a new box. The number entered will be used for subsequent boxes until changed. The class index number is displayed in a box's drag corner.
 
 ##### Keyboard actions for the active box (red box):
 * 'Left' and 'Right' arrow keys rotate the box around its center.
@@ -121,8 +121,7 @@ The saved annotated image with 47 boxes.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
 * The OpenCV window manager in Linux (Ubuntu) allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. In many Windows systems, the mouse wheel doesn't zoom the image. Zoom functions, however, can be achieved with the up and down arrow keys. 
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
-* Box line may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and thus may overlap the object.
-* If you are right-clicking to draw a box and nothing is happening, remember to first press the 'n' key, then right-click twice to define the opposite corners.
+* Box line may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and may thus overlap the object area.
 * The terminal window provides feedback on save actions and errors. It may
 be covered by the main image window, so reposition windows as needed.
 * Clicking the image window's 'X' button will not quit the program, it just
