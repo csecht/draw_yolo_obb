@@ -1336,27 +1336,18 @@ class Utility:
             class_index, x1_norm, y1_norm, ..., x4_norm, y4_norm
         """
         img_h, img_w = im_size
-        points = np.array(box.points)
+        points = box.points
 
         # Calculate center in pixels
-        center_px = points.mean(axis=0)
+        center_px = np.mean(points, axis=0)
 
-        # Calculate primary axis vector (width direction)
-        vec_w = points[1] - points[0]
-        width_px = np.linalg.norm(vec_w)
+        # Calculate width and height in pixels
+        width_px = np.linalg.norm(points[1] - points[0])
+        height_px = np.linalg.norm(points[3] - points[0])
 
-        # Calculate perpendicular vector (height direction)
-        vec_h = points[3] - points[0]
-        height_px = np.linalg.norm(vec_h)
-
-        # Calculate rotation angle (critical for reconstruction)
-        angle_rad = np.arctan2(vec_w[1], vec_w[0])
-
-        # Convert to normalized coordinates
-        center_x_norm = center_px[0] / img_w
-        center_y_norm = center_px[1] / img_h
-        w_norm = width_px / img_w
-        h_norm = height_px / img_h
+        # Convert center, width, and height to normalized coordinates
+        center_x_norm, center_y_norm = center_px / [img_w, img_h]
+        w_norm, h_norm = width_px / img_w, height_px / img_h
 
         # Corners relative to center before rotation
         half_w, half_h = w_norm / 2, h_norm / 2
@@ -1366,6 +1357,12 @@ class Utility:
             [ half_w,  half_h],
             [-half_w,  half_h]
         ])
+
+        # Calculate rotation angle in radians
+        angle_rad = np.arctan2(
+            points[1][1] - points[0][1],
+            points[1][0] - points[0][0]
+        )
 
         # Make and apply the rotation matrix shift.
         rot = np.array([
