@@ -213,11 +213,15 @@ class BoxDrawer:
             'blue': (255, 0, 0),
         }
 
+        # Attributes for zooming the image in Windows.
         self.zoom_level = 1.0
         self.zoom_step = 0.1  # Same as Linux default
         self.zoom_center = None  # Mouse position when zooming
         self.last_mouse_pos = (0, 0)  # Track mouse position
         self.zoom_key_active = False  # Track if zoom modifier key is pressed
+
+        # Used for platform-specific key handling in handle_keys().
+        self.arrow_keys = {}
 
     def open_image(self) -> None:
         """
@@ -374,6 +378,10 @@ class BoxDrawer:
         """
 
         # CV WINDOW SETUP
+        #  Requires cv2.WINDOW_GUI_NORMAL instead of cv2.WINDOW_NORMAL because
+        #  WINDOWS_NORMAL runs a Qt thread that expects to be the main loop.
+        #  The program runs fine with WINDOWS_NORMAL, but throws a Qt timer
+        #  error closed from app.on_close().
         self.window_name = "View and Edit OBB ('h' for help)"
         cv2.namedWindow(self.window_name,cv2.WINDOW_GUI_NORMAL,)
         cv2.resizeWindow(
@@ -503,7 +511,7 @@ class BoxDrawer:
                 ord("c"): self._handle_clone_box,
                 ord("r"): self._handle_remove_box,
                 ord("h"): Utility.show_help,
-                # Arrow keys
+                # Arrow keys, platform-specific
                 self.arrow_keys['left']: lambda: self._handle_rotate(angle_increment=-1),
                 self.arrow_keys['right']: lambda: self._handle_rotate(angle_increment=1),
                 self.arrow_keys['up']: self._handle_increase_size,
@@ -897,8 +905,7 @@ class BoxDrawer:
         """
 
         for _box in boxes:
-            if len(_box.points) == 4 and self.is_point_inside_box(point,
-                                                                  _box.points):
+            if len(_box.points) == 4 and self.is_point_inside_box(point,_box.points):
                 return False
         return True
 
@@ -1194,9 +1201,10 @@ class YoloOBBControl(tk.Tk):
         Called from YoloInfoWindow __init__() window protocol and button.
         """
 
-        # Close in the reverse of the order they were opened.
+        # Stop the while loop, causing draw_box() to destroy the CV
+        #  window, then destroy the Tk app and its draw_box() thread.
+        #  sys.exit() is just in case.
         box_drawer.stop_loop.set()
-        cv_thread.join()
         self.destroy()
         print('User quit the program.')
         sys.exit(0)
@@ -1447,24 +1455,31 @@ class Utility:
         help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
 
 
-if __name__ == "__main__":
+def main():
+    """
+    Main function to run the program, with threaded CV functions.
+    """
 
-    # Instantiate the drawing class with the default image.
-    # Loading with a starting image is necessary for flow architecture.
-    box_drawer = BoxDrawer(image_path='images/start_image.jpg')
-
-    # Create the tk.Tk control window as the main thread; via inheritance.
-    app = YoloOBBControl()
     app.config_control_window()
 
     # Run update_image_info() after app Tk window is initialized because
     #  it uses Tk winfo_screenwidth() and winfo_screenheight().
     box_drawer.update_image_info()
 
-    # Run live updates of cv2 image with a threaded while loop.
-    #  Requires cv2.WINDOW_GUI_NORMAL instead of cv2.WINDOW_NORMAL.
-    cv_thread = threading.Thread(target=box_drawer.draw_box)
-    cv_thread.start()
+    # Run live updates of threaded cv2 events with the while loop in draw_box().
+    threading.Thread(target=box_drawer.draw_box).start()
 
     print(f'{Path(sys.modules["__main__"].__file__).stem} now running...')
     app.mainloop()
+
+
+if __name__ == "__main__":
+
+    # Instantiate the drawing class with the default image.
+    # Loading with a starting image is necessary for flow architecture.
+    box_drawer = BoxDrawer(image_path='images/start_image.jpg')
+
+    # Instantiate the Tkinter control window; tk.Tk is inherited.
+    # Call main() to start the application.
+    app = YoloOBBControl()
+    main()
