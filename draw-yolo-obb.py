@@ -505,6 +505,10 @@ class BoxDrawer:
             if key == -1:
                 return
 
+            # Pixel increment for box movement and resizing.
+            #  Larger is faster, but less precise. Keep as factor of 180.
+            incr = 2
+
             # Define a dispatch dictionary to map keys to their handlers.
             key_handlers = {
                 ord("b"): self._handle_new_box,
@@ -512,20 +516,20 @@ class BoxDrawer:
                 ord("r"): self._handle_remove_box,
                 ord("h"): Utility.show_help,
                 # Arrow keys, platform-specific
-                self.arrow_keys['left']: lambda: self._handle_rotate(angle_increment=-1),
-                self.arrow_keys['right']: lambda: self._handle_rotate(angle_increment=1),
-                self.arrow_keys['up']: self._handle_increase_size,
-                self.arrow_keys['down']: self._handle_decrease_size,
+                self.arrow_keys['left']: lambda: self._handle_rotate(angle_delta=-incr),
+                self.arrow_keys['right']: lambda: self._handle_rotate(angle_delta=incr),
+                self.arrow_keys['up']: lambda: self._handle_increase_size(delta=incr),
+                self.arrow_keys['down']: lambda: self._handle_decrease_size(delta=incr),
                 # Box movement
-                ord("i"): lambda: self._handle_move(xy_vector=(0, -1)),
-                ord("k"): lambda: self._handle_move(xy_vector=(0, 1)),
-                ord("j"): lambda: self._handle_move(xy_vector=(-1, 0)),
-                ord("l"): lambda: self._handle_move(xy_vector=(1, 0)),
+                ord("i"): lambda: self._handle_move(xy_vector=(0, -incr)),
+                ord("k"): lambda: self._handle_move(xy_vector=(0, incr)),
+                ord("j"): lambda: self._handle_move(xy_vector=(-incr, 0)),
+                ord("l"): lambda: self._handle_move(xy_vector=(incr, 0)),
                 # Box sizing
-                ord("e"): lambda: self._handle_resize_height(delta=1),
-                ord("d"): lambda: self._handle_resize_height(delta=-1),
-                ord("f"): lambda: self._handle_resize_width(delta=1),
-                ord("s"): lambda: self._handle_resize_width(delta=-1),
+                ord("e"): lambda: self._handle_resize_height(delta=incr),
+                ord("d"): lambda: self._handle_resize_height(delta=-incr),
+                ord("f"): lambda: self._handle_resize_width(delta=incr),
+                ord("s"): lambda: self._handle_resize_width(delta=-incr),
             }
 
             # Handle the key using the dispatch dictionary.
@@ -588,39 +592,39 @@ class BoxDrawer:
             self.boxes = [box for box in self.boxes if box != self.active_box]
             self.active_box = None
 
-    def _handle_rotate(self, angle_increment):
+    def _handle_rotate(self, angle_delta):
         """
         Handle rotating a box with arrow keys.
         Args:
-            angle_increment: The amount to rotate the box, 1 or -1 degree.
+            angle_delta: The amount to rotate the box, + or - increment.
         """
         if self.active_box and len(self.active_box.points) == 4:
-            self.active_box.rotation_angle += angle_increment
+            self.active_box.rotation_angle += angle_delta
             self.active_box.rotation_angle = max(min(self.active_box.rotation_angle, 180), -180)
             self.active_box.update_points()
             self.check_boundaries(self.active_box)
 
-    def _handle_increase_size(self):
+    def _handle_increase_size(self, delta: int):
         """Handle up arrow key for zoom (Windows) or resize (Linux/Mac)."""
         if MY_OS == 'win':
             self.zoom_level = min(5.0, self.zoom_level + self.zoom_step)
             self.zoom_center = self.last_mouse_pos
         else:  # Linux or macOS
             if self.active_box and len(self.active_box.points) == 4:
-                self.active_box.height += 1
-                self.active_box.width += 1
+                self.active_box.height += delta
+                self.active_box.width += delta
                 self.active_box.update_points()
                 self.check_boundaries(self.active_box)
 
-    def _handle_decrease_size(self):
+    def _handle_decrease_size(self, delta: int):
         """Handle down arrow key for zoom (Windows) or resize (Linux/Mac)"""
         if MY_OS == 'win':
             self.zoom_level = max(1.0, self.zoom_level - self.zoom_step)
             self.zoom_center = None if self.zoom_level == 1.0 else self.last_mouse_pos
         else:  # Linux or macOS
             if self.active_box and len(self.active_box.points) == 4:
-                self.active_box.height = max(1, self.active_box.height - 1)
-                self.active_box.width = max(1, self.active_box.width - 1)
+                self.active_box.height = max(1, self.active_box.height - delta)
+                self.active_box.width = max(1, self.active_box.width - delta)
                 self.set_min_hw(self.min_dim)
                 self.active_box.update_points()
 
@@ -643,7 +647,7 @@ class BoxDrawer:
         """
         Handle resizing box height with e, d keys; increase, decrease.
         Args:
-            delta: The change in height to apply to the box.
+            delta: The change in width to apply to the box, + or - increment.
         """
         if self.active_box and len(self.active_box.points) == 4:
             if delta > 0:
@@ -659,7 +663,7 @@ class BoxDrawer:
         """
         Handle resizing box width with f, s keys; increase, decrease.
         Args:
-            delta: The change in width to apply to the box.
+            delta: The change in width to apply to the box, + or - increment.
         """
         if self.active_box and len(self.active_box.points) == 4:
             if delta > 0:
