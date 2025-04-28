@@ -39,15 +39,15 @@ The up and down arrow keys zoom the image in and out in Windows.
 The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
 The 'X' button in the control window bar quits the program.
+Control-q quits the program from the control window.
 The 'h' key, from the image window, pops up a scrolling help window.
 
-The terminal window provides feedback on save actions and errors. It may
-be covered by the main image window that fills most of the screen, so
-reposition windows as needed.
-
 Clicking the image window's 'X' button will not end the program, it just
-redraws the window. Quit the program from the YOLO OBB Control window
-with Esc or its window close button, 'X'.
+redraws the window.
+
+The terminal/console window provides feedback on save actions and errors.
+It maybe covered by the main image window that fills most of the screen,
+so, reposition windows as needed. The control window is always on top.
 -- END OF USAGE INFO --
 """
 
@@ -491,7 +491,7 @@ class BoxDrawer:
                     'right': 83,
                     'down': 84,
                 }
-            else:  # is macOS, MacBookPro
+            else:  # is macOS, MacBookPro M3
                 # NOTE: key action is intermittent on macOS. Key codes are valid.
                 key = cv2.waitKeyEx(1)
                 self.arrow_keys = {
@@ -505,7 +505,7 @@ class BoxDrawer:
             if key == -1:
                 return
 
-            # Pixel increment for box movement and resizing.
+            # Pixel increment for box movement, rotation, and resizing.
             #  Larger is faster, but less precise. Keep as factor of 180.
             incr = 2
 
@@ -945,8 +945,10 @@ class BoxDrawer:
         """
         Save to a text file boxes class index and point coordinates
         in YOLO OBB format. Also save the drawn image as a jpeg file.
+        Files are saved to the local 'results' folder.
         Called from the 'Save' button in YoloOBBControl.config_control_window()
         """
+
         with self.control_lock:
             # Need to remove any non-4-point elements for an accurate box count.
             #  This may not be necessary, but it is a good practice.
@@ -957,21 +959,22 @@ class BoxDrawer:
                 # print('No boxes to save.')
                 return
 
-            # Create the results directory if it doesn't exist.
-            Path('results').mkdir(parents=True, exist_ok=True)
-
-            result_image = self.image_array.copy()
+            results_dir = 'results'
             img_name = self.image_info['short name']
+            result_image = self.image_array.copy()
+
+            # Create the results directory if it doesn't exist.
+            Path(results_dir).mkdir(parents=True, exist_ok=True)
 
             # Box.points are in absolute coordinates. So, need to convert pixels to
             #  normalized coordinates (0.0 to 1.0).
             # Write the data to a text file as yolo-obb labels and draw boxes on the image.
-            with open(f"results/{img_name}.txt", "w") as file:
+            with open(f'{results_dir}/{img_name}.txt', 'w') as result_file:
                 for _box in self.boxes:
                     if len(_box.points) == 4:
                         obb_label = Utility.convert_to_obb_label_format(
                             box=_box, im_size=self.image_info['h&w'])
-                        file.write(f'{obb_label}\n')
+                        result_file.write(f'{obb_label}\n')
 
                         pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
                         cv2.polylines(result_image,[pts],
@@ -987,13 +990,14 @@ class BoxDrawer:
                                                   class_idx=str(_box.class_index),
                                                   box_points=_box.points)
 
-            cv2.imwrite(f"results/{img_name}_result.jpg", result_image)
+            cv2.imwrite(f"{results_dir}/{img_name}_result.jpg", result_image)
 
             app.info_txt.set(f'{len(self.boxes)} YOLO OBB labels, and the annotated image,\n'
                              ' were saved to the results folder.')
+
         # Need to provide a session record of save actions for the user.
-        print(f'{len(self.boxes)} YOLO OBB labels, and their annotated image,'
-              ' were saved to the results folder.')
+        print(f'{len(self.boxes)} YOLO OBB labels and annotated image for {img_name}'
+              f' were saved to folder "{results_dir}".')
 
 
 class YoloOBBControl(tk.Tk):
@@ -1096,10 +1100,11 @@ class YoloOBBControl(tk.Tk):
         )
 
         self.bind('<Escape>', lambda _: self.on_close())
-        self.bind("<FocusIn>", lambda _: self.set_color_focusin())
-        self.bind("<FocusOut>", lambda _: self.set_color_focusout())
-        self.class_entry.bind("<Return>", lambda _: self.set_class_index())
-        self.class_entry.bind("<FocusOut>", lambda _: self.set_class_index())
+        self.bind('<Control-q>', lambda _: self.on_close())
+        self.bind('<FocusIn>', lambda _: self.set_color_focusin())
+        self.bind('<FocusOut>', lambda _: self.set_color_focusout())
+        self.class_entry.bind('<Return>', lambda _: self.set_class_index())
+        self.class_entry.bind('<FocusOut>', lambda _: self.set_class_index())
 
         self.entry_label.grid(
             row=0, column=0,
@@ -1218,12 +1223,13 @@ class Utility:
     """
     A class of static methods to provide utility functions.
     Methods include:
-    view_labels()
-    convert_from_obb_label_format()
-    convert_to_obb_label_format()
-    increase_line_thickness()
-    decrease_line_thickness()
-    show_help()
+        view_labels
+        convert_from_obb_label_format
+        convert_to_obb_label_format
+        increase_line_thickness
+        decrease_line_thickness
+        get_text_offsets
+        show_help
     """
 
     @staticmethod
@@ -1290,7 +1296,7 @@ class Utility:
         if box_drawer.boxes:
             messagebox.showinfo(
                 title='Conversion complete',
-                detail=f'{len(box_drawer.boxes)} OBB boxes were created\n'
+                detail=f'{len(box_drawer.boxes)} OBB boxes were created'
                        ' from the YOLO labels file.'
             )
 
@@ -1399,14 +1405,14 @@ class Utility:
     @staticmethod
     def increase_line_thickness():
         """
-        Increase the line thickness of the drawn boxes.
+        Increase the line thickness of the drawn boxes and font.
         """
         box_drawer.image_info['line thickness'] += 1
 
     @staticmethod
     def decrease_line_thickness():
         """
-        Decrease the line thickness of the drawn boxes.
+        Decrease the line thickness of the drawn boxes and font.
         """
         box_drawer.image_info['line thickness'] = max(1, box_drawer.image_info['line thickness'] - 1)
 
