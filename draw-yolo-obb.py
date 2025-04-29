@@ -176,10 +176,11 @@ class BoxDrawer:
         self.stop_loop = threading.Event()
         self.control_lock = threading.RLock()
 
-        self.window_name = ''
+        self.window_name = ''  # Set in draw_box().
 
         self.image_array: np.ndarray = cv2.imread(image_path)
-        self.image_path: str = image_path  # The default start image
+        self.display_image = np.array([])  # The active drawing image.
+        self.image_path: str = image_path  # The default start image.
         self.image_name: str = Path(image_path).stem  # File name without extension
         self.image_info = {}  # Dictionary populated in update_image_info().
 
@@ -207,9 +208,9 @@ class BoxDrawer:
             'white': (255, 255, 255),
             'black': (0, 0, 0),  # Black color for class index text
             'red': (0, 0, 255),  # Red color for active box
-            'green': (0, 255, 0),  # Green color for boxes
-            'cyan': (255, 255, 0),  # Cyan color for dot to drag box corner
-            'orange': (0, 159, 230),  # Orange color for saved class index circle
+            'green': (0, 255, 0),  # Green color for non-active boxes
+            'cyan': (255, 255, 0),  # Cyan color for dot in drag corner
+            'orange': (0, 159, 230),
             'blue': (255, 0, 0),
         }
 
@@ -374,7 +375,8 @@ class BoxDrawer:
         Draw rectangular polygons on the image and handle user interactions.
         A while loop keeps the image updated with cv2.imshow and keeps key
         events active for box repositioning, resizing, and initiating
-        drawing.
+        drawing. Is threaded in main() for live updates and interactions
+        with the YoloOBBControl Tk window.
         """
 
         # CV WINDOW SETUP
@@ -398,11 +400,11 @@ class BoxDrawer:
         while not self.stop_loop.is_set():
 
             # Using a copy allows live drawing of boxes.
-            display_image = self.image_info['copy'].copy()
+            self.display_image = self.image_info['copy'].copy()
 
             if MY_OS == 'win' and self.zoom_level != 1.0 and self.zoom_center:
                 # Zooms window the up/down arrow keys on Windows.
-                _h, _w = display_image.shape[:2]
+                _h, _w = self.display_image.shape[:2]
                 img_h, img_w = self.image_info['h&w']
                 scale = self.zoom_level
 
@@ -417,8 +419,8 @@ class BoxDrawer:
                 ])  #, dtype=np.float32)
 
                 # Apply transformation
-                display_image = cv2.warpAffine(
-                    display_image,
+                self.display_image = cv2.warpAffine(
+                    self.display_image,
                     M=t_matrix,
                     dsize=(_w, _h),
                     flags=cv2.INTER_LINEAR,
@@ -441,7 +443,7 @@ class BoxDrawer:
                     color = (self.cv_font_color['green']
                              if not _box.is_active else self.cv_font_color['red'])
 
-                    cv2.polylines(img=display_image,
+                    cv2.polylines(img=self.display_image,
                                   pts=[pts],
                                   isClosed=True,
                                   color=color,
@@ -451,20 +453,19 @@ class BoxDrawer:
                     # Draw a circle in the bottom-right corner of the active box.
                     # Make radius size relative to image size.
                     if _box.is_active:
-                        cv2.circle(display_image,
+                        cv2.circle(self.display_image,
                                    center=pts[2],
                                    radius=self.get_circle_radius(),
                                    color=self.cv_font_color['cyan'],
                                    thickness=cv2.FILLED,
                                    )
 
-                    self.put_text_class_index(image=display_image,
+                    self.put_text_class_index(image=self.display_image,
                                               class_idx=str(_box.class_index),
                                               box_points=pts,
                                               )
 
-            cv2.imshow(self.window_name, display_image)
-
+            cv2.imshow(self.window_name, self.display_image)
             self.handle_keys()
 
         cv2.destroyWindow(self.window_name)
@@ -961,7 +962,6 @@ class BoxDrawer:
 
             results_dir = 'results'
             img_name = self.image_info['short name']
-            result_image = self.image_array.copy()
 
             # Create the results directory if it doesn't exist.
             Path(results_dir).mkdir(parents=True, exist_ok=True)
@@ -976,21 +976,7 @@ class BoxDrawer:
                             box=_box, im_size=self.image_info['h&w'])
                         result_file.write(f'{obb_label}\n')
 
-                        pts = np.array(_box.points, np.int32).reshape((-1, 1, 2))
-                        cv2.polylines(result_image,[pts],
-                                      isClosed=True,
-                                      color=self.cv_font_color['orange'],
-                                      thickness=self.image_info['line thickness'])
-                        cv2.circle(result_image,
-                                   center=_box.points[2],
-                                   radius=self.get_circle_radius(),
-                                   color=self.cv_font_color['orange'],
-                                   thickness=-1)
-                        self.put_text_class_index(result_image,
-                                                  class_idx=str(_box.class_index),
-                                                  box_points=_box.points)
-
-            cv2.imwrite(f"{results_dir}/{img_name}_result.jpg", result_image)
+            cv2.imwrite(f"{results_dir}/{img_name}_result.jpg", self.display_image)
 
             app.info_txt.set(f'{len(self.boxes)} YOLO OBB labels, and the annotated image,\n'
                              ' were saved to the results folder.')
@@ -1486,7 +1472,7 @@ def main():
 if __name__ == "__main__":
 
     # Instantiate the drawing class with the default image.
-    # Loading with a starting image is necessary for flow architecture.
+    # Loading a starting image is necessary for current flow architecture.
     box_drawer = BoxDrawer(image_path='images/start_image.jpg')
 
     # Instantiate the Tkinter control window; tk.Tk is inherited.
