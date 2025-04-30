@@ -12,7 +12,7 @@ There are three ways to draw a box:
 Option 1: Click on the image and press 'b' to place a small box near the
 top-left corner of the image.
 Option 2: Right-click and drag to draw a new box anywhere in the image.
-Option 3: Click on an existing box, press 'c' to clone it, then drag the
+Option 3: Click in an existing box, press 'c' to clone it, then drag the
 new box to a new location.
 
 To move and reshape a box: click inside it to activate, then drag to
@@ -38,8 +38,8 @@ Program control keys:
 The up and down arrow keys zoom the image in and out in Windows.
 The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
-The 'X' button in the control window bar quits the program.
 Control-q quits the program from the control window.
+The 'X' button in the control window bar quits the program.
 The 'h' key, from the image window, pops up a scrolling help window.
 
 Clicking the image window's 'X' button will not end the program, it just
@@ -383,7 +383,7 @@ class BoxDrawer:
         #  Requires cv2.WINDOW_GUI_NORMAL instead of cv2.WINDOW_NORMAL because
         #  WINDOWS_NORMAL runs a Qt thread that expects to be the main loop.
         #  The program runs fine with WINDOWS_NORMAL, but throws a Qt timer
-        #  error closed from app.on_close().
+        #  error when closed from app.on_close().
         self.window_name = "View and Edit OBB ('h' for help)"
         cv2.namedWindow(self.window_name,cv2.WINDOW_GUI_NORMAL,)
         cv2.resizeWindow(
@@ -468,6 +468,7 @@ class BoxDrawer:
             cv2.imshow(self.window_name, self.display_image)
             self.handle_keys()
 
+        # stop_loop is set, so close the window and prepare to exit.
         cv2.destroyWindow(self.window_name)
 
     def handle_keys(self) -> None:
@@ -545,10 +546,10 @@ class BoxDrawer:
         display_img_h, display_img_w = self.image_info['h&w']
         self.b_box_counter += 1
         offset = self.b_box_counter * 5
-        x, y = round(display_img_w * 0.03) + offset, round(display_img_h * 0.03) + offset
+        _x, _y = round(display_img_w * 0.03) + offset, round(display_img_h * 0.03) + offset
 
         new_box = Box(class_index=self.current_class_index,
-                      points=[(x, y), (x + 150, y + 150)],
+                      points=[(_x, _y), (_x + 150, _y + 150)],
                       rotation_angle=0)
         new_box.update_properties()
         new_box.update_points()
@@ -563,13 +564,15 @@ class BoxDrawer:
         if not self.active_box:
             return
 
-        display_img_h, display_img_w = self.image_info['h&w']
+        img_h, img_w = self.image_info['h&w']
         offset_points: np.ndarray = self.active_box.points.copy()
         right_side, bottom_side = offset_points[2]
 
-        if right_side + self.min_dim >= display_img_w:
+        # Need to offset the cloned box down and to the right for visual
+        #  clarity and ensure that it does not exceed image boundaries.
+        if right_side + self.min_dim >= img_w:
             offset = np.array([-self.min_dim, 0])
-        elif bottom_side + self.min_dim >= display_img_h:
+        elif bottom_side + self.min_dim >= img_h:
             offset = np.array([0, -self.min_dim])
         else:
             offset = np.array([self.min_dim, self.min_dim])
@@ -883,7 +886,7 @@ class BoxDrawer:
             bool: True if the point is inside the box, False otherwise.
         """
 
-        x, y = point
+        _x, _y = point
 
         # Need to be able to drag the drag corner of an active box without
         #  moving an underlying box. If there is overlap, then return False
@@ -894,10 +897,10 @@ class BoxDrawer:
         min_drag_size = self.min_dim // 2
         if self.active_box:
             corner_x, corner_y = self.active_box.points[2]
-            if abs(corner_x - x) <= min_drag_size and abs(corner_y - y) <= min_drag_size:
+            if abs(corner_x - _x) <= min_drag_size and abs(corner_y - _y) <= min_drag_size:
                 return False
 
-        return cv2.pointPolygonTest(contour=box_points, pt=(x, y), measureDist=False) >= 0
+        return cv2.pointPolygonTest(contour=box_points, pt=(_x, _y), measureDist=False) >= 0
 
     def is_point_outside_all_boxes(self, point: tuple, boxes: list) -> bool:
         """
@@ -1290,7 +1293,7 @@ class Utility:
     def convert_from_obb_label_format(pts: list,
                                       im_size: tuple) -> tuple:
         """
-        Convert YOLO oriented bounding box (OBB)O labels to a format
+        Convert YOLO oriented bounding box (OBB) labels to a format
         suitable for viewing and further processing. This function
         converts normalized OBB points to absolute pixel coordinates.
         Called from view_labels().
