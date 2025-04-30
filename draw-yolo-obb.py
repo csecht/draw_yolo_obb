@@ -40,7 +40,7 @@ The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
 Control-q quits the program from the control window.
 The 'X' button in the control window bar quits the program.
-The 'h' key, from the image window, pops up a scrolling help window.
+The 'Help' button pops up a scrolling text usage window.
 
 Clicking the image window's 'X' button will not end the program, it just
 redraws the window.
@@ -516,7 +516,7 @@ class BoxDrawer:
                 ord("b"): self._handle_new_box,
                 ord("c"): self._handle_clone_box,
                 ord("r"): self._handle_remove_box,
-                ord("h"): Utility.show_help,
+                # ord("h"): Utility.show_help,
                 # Arrow keys, platform-specific
                 self.arrow_keys['left']: lambda: self._handle_rotate(angle_delta=-incr),
                 self.arrow_keys['right']: lambda: self._handle_rotate(angle_delta=incr),
@@ -1087,6 +1087,12 @@ class YoloOBBControl(tk.Tk):
             command=Utility.decrease_line_thickness,
             background=self.color['line button'],
         )
+        help_btn = tk.Button(
+            master=self,
+            text='Help',
+            command=Utility.show_help,
+            # background=self.color['line button'],
+        )
 
         self.bind('<Escape>', lambda _: self.on_close())
         self.bind('<Control-q>', lambda _: self.on_close())
@@ -1113,15 +1119,18 @@ class YoloOBBControl(tk.Tk):
         save_button.grid(
             row=5, column=0,
             padx=10, pady=5, sticky=tk.EW)
-        increase_thickness_btn.grid(
-            row=6, column=0,
-            padx=(0, 90), pady=10, sticky=tk.E)  # to the right
-        decrease_thickness_btn.grid(
-            row=6, column=0,
-            padx=(0, 45), pady=10, sticky=tk.E)  # less to the right
         self.line_thickness_label.grid(
             row=6, column= 0,
-            sticky=tk.EW)  # centered
+            padx=(0, 100), pady=10, sticky=tk.E)  # To the left of the +,- buttons
+        increase_thickness_btn.grid(
+            row=6, column=0,
+            padx=(0, 55), pady=10, sticky=tk.E)
+        decrease_thickness_btn.grid(
+            row=6, column=0,
+            padx=(0, 10), pady=10, sticky=tk.E)  # Right edge
+        help_btn.grid(
+            row=6, column=0,
+            padx=(10, 0), pady=10, sticky=tk.W)  # Left edge
 
     def set_class_index(self):
         """
@@ -1451,7 +1460,7 @@ class Utility:
                                  wrap=tk.WORD,
                                  )
         help_text.insert(tk.INSERT, __doc__)
-        help_text.pack(fill=tk.BOTH, side=tk.LEFT, expand=True)
+        help_text.pack(fill='both', side='left', expand=True)
 
 
 def main():
