@@ -37,6 +37,8 @@ The 'r' key removes the active (red) box.
 Program control keys:
 The up and down arrow keys zoom the image in and out in Windows.
 The mouse wheel zooms in and out in Linux.
+'Increment' values in the Control window set pixel and angle units
+  for keyboard manipulations. Lower values are more precise, but slower.
 The 'Esc' key quits program from the control window.
 Control-q quits the program from the control window.
 The 'X' button in the control window bar quits the program.
@@ -194,7 +196,7 @@ class BoxDrawer:
         self.is_dragging_corner = False  # Tracks if a corner is being dragged
         self.is_dragging_box = False  # Tracks if the entire box is being dragged
         self.is_dragging_new_box = False  # Tracks if rt-click drawing a new box.
-        self.start_point = (0, 0)  # Start coortinate to draw a new box.
+        self.start_point = (0, 0)  # Starting coordinate to draw a new box.
         self.offset = (0, 0)  # Offset for dragging the entire box
         self.b_box_counter = 0  # Counter for 'b' key presses
         self.current_class_index = 0
@@ -218,7 +220,7 @@ class BoxDrawer:
         self.zoom_level = 1.0
         self.zoom_step = 0.1  # Same as Linux default
         self.zoom_center = None  # Mouse position when zooming
-        self.last_mouse_pos = (0, 0)  # Track mouse position
+        self.last_mouse_pos = (0, 0)  # Track mouse position, for Windows.
         self.zoom_key_active = False  # Track if zoom modifier key is pressed
 
         # Used for platform-specific key handling in handle_keys().
@@ -312,7 +314,7 @@ class BoxDrawer:
 
         image_name: str = Path(self.image_path).stem
         img_name_and_extension = Path(self.image_path).name
-        image_copy: ndarray = self.image_array.copy()
+        image_copy: np.ndarray = self.image_array.copy()
         img_h, img_w, _ = self.image_array.shape
 
         # Need the maximum CV window to be smaller than the screen size,
@@ -508,8 +510,9 @@ class BoxDrawer:
                 return
 
             # Pixel increment for box movement, rotation, and resizing.
-            #  Larger is faster, but less precise. Keep as factor of 180.
-            incr = 2
+            #  Larger is faster, but less precise. Best as factor of 180.
+            #  Is set in YoloOBBControl class with Radiobuttons.
+            incr = app.increment.get()
 
             # Define a dispatch dictionary to map keys to their handlers.
             key_handlers = {
@@ -679,6 +682,41 @@ class BoxDrawer:
 
             self.active_box.update_points()
 
+    def display_to_image_coordinates(self, display_x, display_y):
+        """
+        Convert display coordinates (where mouse is clicking in zoomed view)
+        to original image coordinates; for Windows platform only.
+
+        Args:
+            display_x: The x-coordinate in the display window
+            display_y: The y-coordinate in the display window
+
+        Returns:
+            Tuple of (x, y) coordinates in the original image space
+        """
+
+        # If not Windows, or not zoomed, or no zoom center defined,
+        #  return original coordinates.
+        if MY_OS != 'win' or self.zoom_level == 1.0 or not self.zoom_center:
+            return display_x, display_y
+
+        # If zoomed, convert display coordinates to image coordinates
+        scale = self.zoom_level
+        mouse_x, mouse_y = self.zoom_center
+
+        # Create inverse transformation matrix
+        inv_scale = 1.0 / scale
+        inv_matrix = np.array([
+            [inv_scale, 0, -inv_scale * (1 - scale) * mouse_x],
+            [0, inv_scale, -inv_scale * (1 - scale) * mouse_y]
+        ], dtype=np.float32)
+
+        # Apply inverse transformation to convert display coordinates to image coordinates
+        img_coords = np.array([[display_x, display_y]], dtype=np.float32)
+        transformed = cv2.transform(img_coords.reshape(1, 1, 2), inv_matrix)
+
+        return int(transformed[0, 0, 0]), int(transformed[0, 0, 1])
+
     def handle_mouse_events(self, event, x, y, *args) -> None:
         """
         Handle mouse events for drawing and manipulating boxes.
@@ -690,7 +728,8 @@ class BoxDrawer:
         :param args: Unused threading.Event arguments for *flags* and *params*.
         """
         # Store mouse position for zoomed image (Windows) function in handle_keys().
-        self.last_mouse_pos = (x, y)
+        img_x, img_y = self.display_to_image_coordinates(x, y)
+        self.last_mouse_pos = (img_x, img_y)
 
         # Need to stop dragging if the mouse leaves the image area.
         img_h, img_w = self.image_info['h&w']
@@ -701,11 +740,11 @@ class BoxDrawer:
 
         # Define a dispatch dictionary to map events to their handlers.
         event_handlers = {
-            cv2.EVENT_LBUTTONDOWN: lambda: self._handle_left_button_down(x, y),
-            cv2.EVENT_RBUTTONDOWN: lambda: self._handle_right_button_down(x, y),
-            cv2.EVENT_RBUTTONUP: lambda: self._handle_right_button_up(x, y),
-            cv2.EVENT_MOUSEMOVE: lambda: self._handle_mouse_move(x, y),
-            cv2.EVENT_LBUTTONUP: lambda: self._handle_left_button_up(x, y)
+            cv2.EVENT_LBUTTONDOWN: lambda: self._handle_left_button_down(img_x, img_y),
+            cv2.EVENT_RBUTTONDOWN: lambda: self._handle_right_button_down(img_x, img_y),
+            cv2.EVENT_RBUTTONUP: lambda: self._handle_right_button_up(img_x, img_y),
+            cv2.EVENT_MOUSEMOVE: lambda: self._handle_mouse_move(img_x, img_y),
+            cv2.EVENT_LBUTTONUP: lambda: self._handle_left_button_up(img_x, img_y)
         }
 
         # Handle events using the dispatch dictionary.
@@ -1009,6 +1048,8 @@ class YoloOBBControl(tk.Tk):
         self.current_image_name = tk.StringVar()  # Used to display the current image name.
         self.img_name_label = tk.Label()
         self.line_thickness_label = tk.Label()
+        self.increment_label = tk.Label()
+        self.increment = tk.IntVar()  # Used to set the size and rotation step factor.
 
         # Want the 'Get new image' button bg to match the image name label fg
         #  when focusOut. When focusIn, image name label fg uses a better contrast.
@@ -1018,7 +1059,7 @@ class YoloOBBControl(tk.Tk):
             'window': 'gray75',
             'dark': 'gray30',
             'save button': 'dodger blue',
-            'line button': 'dark orange',
+            'increment': 'dark orange',
             'black': 'gray0',
         }
 
@@ -1027,7 +1068,8 @@ class YoloOBBControl(tk.Tk):
         self.entry_label.configure(bg=self.color['dark'])
         self.info_label.config(bg=self.color['dark'], fg=self.color['dark'],)
         self.img_name_label.config(bg=self.color['dark'], fg=self.color['img label'])
-        self.line_thickness_label.config(bg=self.color['dark'], fg=self.color['line button'])
+        self.line_thickness_label.config(bg=self.color['dark'], fg=self.color['increment'])
+        self.increment_label.config(bg=self.color['dark'], fg=self.color['increment'])
 
     def set_color_focusin(self):
         self.config(bg=self.color['window'],)
@@ -1035,11 +1077,13 @@ class YoloOBBControl(tk.Tk):
         self.info_label.config(bg=self.color['window'], fg=self.color['black'],)
         self.img_name_label.config(bg=self.color['window'], fg=self.color['save button'])
         self.line_thickness_label.config(bg=self.color['window'], fg='black')
+        self.increment_label.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
         self.title('YOLO OBB Control')
         self.attributes("-topmost", True)
-        self.geometry('390x255+100+400')  # width x height + x_offset + y_offset
+        window_w = 390  # Used to help center widget grid padx values.
+        self.geometry(f'{window_w}x270+100+400')  # width x height + x_offset + y_offset
         self.resizable(width=False, height=False)
         self.config(borderwidth=6, relief='groove')
         self.protocol('WM_DELETE_WINDOW', self.on_close)
@@ -1051,6 +1095,8 @@ class YoloOBBControl(tk.Tk):
         self.current_image_name.set(f'Current image: {Path(box_drawer.image_path).stem}')
         self.img_name_label.config(textvariable=self.current_image_name,)
         self.line_thickness_label.config(text='Line thickness',)
+        self.increment_label.config(text='Increment')
+        self.increment.set(1)  # Default value for incrementing px size and rotation angle.
 
         # This text will be replaced with save metrics when the user saves.
         self.info_txt.set(f"A yolo labels file in the"
@@ -1079,19 +1125,40 @@ class YoloOBBControl(tk.Tk):
             master=self,
             text='＋',  # Full-width plus sign, from https://coolsymbol.com/
             command=Utility.increase_line_thickness,
-            background=self.color['line button'],
+            background=self.color['increment'],
         )
         decrease_thickness_btn = tk.Button(
             master=self,
             text='－',  # Full-width minus sign, from https://coolsymbol.com/
             command=Utility.decrease_line_thickness,
-            background=self.color['line button'],
+            background=self.color['increment'],
         )
         help_btn = tk.Button(
             master=self,
             text='Help',
             command=Utility.show_help,
-            # background=self.color['line button'],
+            background=self.color['window'],
+        )
+        increment1 = tk.Radiobutton(
+            master=self,
+            text='1',
+            value=1,
+            variable=self.increment,
+            background=self.color['increment'],
+            )
+        increment2 = tk.Radiobutton(
+            master=self,
+            text='2',
+            value=2,
+            variable=self.increment,
+            background=self.color['increment'],
+        )
+        increment3 = tk.Radiobutton(
+            master=self,
+            text='3',
+            value=3,
+            variable=self.increment,
+            background=self.color['increment'],
         )
 
         self.bind('<Escape>', lambda _: self.on_close())
@@ -1119,18 +1186,33 @@ class YoloOBBControl(tk.Tk):
         save_button.grid(
             row=5, column=0,
             padx=10, pady=5, sticky=tk.EW)
-        self.line_thickness_label.grid(
-            row=6, column= 0,
-            padx=(0, 100), pady=10, sticky=tk.E)  # To the left of the +,- buttons
+
         increase_thickness_btn.grid(
             row=6, column=0,
-            padx=(0, 55), pady=10, sticky=tk.E)
+            padx=(0, 55), pady=(10,0), sticky=tk.E)
         decrease_thickness_btn.grid(
             row=6, column=0,
-            padx=(0, 10), pady=10, sticky=tk.E)  # Right edge
-        help_btn.grid(
+            padx=(0, 10), pady=(10,0), sticky=tk.E)  # Right edge
+        increment1.grid(
             row=6, column=0,
-            padx=(10, 0), pady=10, sticky=tk.W)  # Left edge
+            padx=(0, 225), pady=(10,0), sticky=tk.E)
+        increment2.grid(
+            row=6, column=0,
+            padx=(0, 175), pady=(10, 0), sticky=tk.E)
+        increment3.grid(
+            row=6, column=0,
+            padx=(0, 125), pady=(10, 0), sticky=tk.E)
+
+        help_btn.grid(
+            row=7, column=0,
+            padx=(10, 0), pady=(0, 10), sticky=tk.W)  # Left edge
+        self.line_thickness_label.grid(
+            row=7, column= 0,
+            padx=(0, 10), pady=(0, 10), sticky=tk.E)  # Below +,- buttons
+        self.increment_label.grid(
+            row=7, column=0,
+            padx=(0, window_w//2 - 30), pady=(0, 10), sticky=tk.E,  # centered
+        )
 
     def set_class_index(self):
         """
