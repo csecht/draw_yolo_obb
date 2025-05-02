@@ -102,12 +102,12 @@ Key assignments are based on the QWERTY keyboard layout. The rationale is that k
 * Increment values are pixels and angle degrees for box manipulations.
      Lower values are more precise, higher values are faster.
 * Line thickness can be set in the control window.
-* 'Esc' key quits program from the control window.
+* 'Control-q' or the 'Esc' key quits program from the control window.
 * 'X' button in the control window bar also quits the program.
 
 ### Screenshots:
 <p align="center">
-<img src="readme_images/control_window_saved.png">
+<img src="readme_images/control_window.png">
 <p align="center">
 The program control window.
 <p align="center">
