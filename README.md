@@ -68,7 +68,7 @@ On saving, the program will write a new OBB-formatted labels file to the `result
 
 There is no option to load a YAML file to display class names; only class indices are used for annotation.
 
-The program cannot directly load a YOLO OBB label file from the `results` folder. To view the new OBB labels, move or copy the saved .txt file to the `labels` folder and restart the script. BE CAREFUL NOT TO OVERWRITE THE ORIGINAL LABELS FILES, which will have the same name.
+The program cannot directly load a YOLO OBB label file from the `results` folder. To view the new OBB labels, move or copy the saved .txt file to the `labels` folder and restart the script. Be careful about overwriting the original labels files, which will have the same name.
 
 #### Drawing Boxes:
 
@@ -97,10 +97,13 @@ be drawn. The default class index is 0. Enter an index value for a different cla
 
 Key assignments are based on the QWERTY keyboard layout. The rationale is that keys' relative positions infer their action, similar to the spatial layout of the arrow keys cluster.
 
-##### Program control keys:
+##### Program control:
+* The Help button pops up a window with program commands and features.
+* Increment values are pixels and angle degrees for box manipulations.
+     Lower values are more precise, higher values are faster.
+* Line thickness can be set in the control window.
 * 'Esc' key quits program from the control window.
 * 'X' button in the control window bar also quits the program.
-* 'h' key, from the image window, pops up a help window.
 
 ### Screenshots:
 <p align="center">
@@ -121,7 +124,7 @@ The saved annotated image with 47 boxes.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
 * The OpenCV window manager in Linux (Ubuntu) allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. In many Windows systems, the mouse wheel doesn't zoom the image. Zoom functions, however, can be achieved with the up and down arrow keys. 
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
-* Box line may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and may thus overlap the object area.
+* Box lines may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and may thus overlap the object area.
 * The terminal window provides feedback on save actions and errors. It may
 be covered by the main image window, so reposition windows as needed.
 * Clicking the image window's 'X' button will not quit the program, it just
