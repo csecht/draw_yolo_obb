@@ -206,7 +206,7 @@ class BoxDrawer:
         self.min_dim = 12
 
         # cv2 colors for drawing boxes and text.
-        self.cv_font_color = {
+        self.cv_color = {
             'white': (255, 255, 255),
             'black': (0, 0, 0),  # Black color for class index text
             'red': (0, 0, 255),  # Red color for active box
@@ -328,7 +328,7 @@ class BoxDrawer:
         # The conversion factors were empirically determined.
         avg_d = (win_h + win_w) * 0.5
         line_thickness = max(round(avg_d * 0.001 * display_factor), 2)
-        font_scale = max(avg_d * 0.0002, 0.4) * display_factor
+        font_scale = max(avg_d * 0.0003, 0.4) * display_factor
 
         # Factors used in cv2.resizeWindow() to scale window to fit each image.
         cv_win_h = round(img_h / display_factor)
@@ -442,8 +442,8 @@ class BoxDrawer:
                         pts = _box.points
 
                     # Highlight active box in red, all others in green.
-                    color = (self.cv_font_color['green']
-                             if not _box.is_active else self.cv_font_color['red'])
+                    color = (self.cv_color['green']
+                             if not _box.is_active else self.cv_color['red'])
 
                     cv2.polylines(img=self.display_image,
                                   pts=[pts],
@@ -454,13 +454,11 @@ class BoxDrawer:
 
                     # Draw a circle in the bottom-right corner of the active box.
                     # Make radius size relative to image size.
-                    if _box.is_active:
-                        cv2.circle(self.display_image,
-                                   center=pts[2],
-                                   radius=self.get_circle_radius(),
-                                   color=self.cv_font_color['cyan'],
-                                   thickness=cv2.FILLED,
-                                   )
+                    cv2.circle(self.display_image,
+                               center=pts[2],
+                               radius=self.get_circle_radius(),
+                               color=self.cv_color['cyan' if _box.is_active else 'white'],
+                               thickness=cv2.FILLED)
 
                     self.put_text_class_index(image=self.display_image,
                                               class_idx=str(_box.class_index),
@@ -981,7 +979,7 @@ class BoxDrawer:
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                     fontScale=self.image_info['font scale'],
                     thickness=2,
-                    color=self.cv_font_color['black'],
+                    color=self.cv_color['black'],
                     lineType=cv2.LINE_AA)
 
 
