@@ -984,49 +984,6 @@ class BoxDrawer:
                     color=self.cv_font_color['black'],
                     lineType=cv2.LINE_AA)
 
-    def on_save(self):
-        """
-        Save to a text file boxes class index and point coordinates
-        in YOLO OBB format. Also save the drawn image as a jpeg file.
-        Files are saved to the local 'results' folder.
-        Called from the 'Save' button in YoloOBBControl.config_control_window()
-        """
-
-        with self.control_lock:
-            # Need to remove any non-4-point elements for an accurate box count.
-            #  This may not be necessary, but it is a good practice.
-            self.boxes = [_box for _box in self.boxes if len(_box.points) == 4]
-
-            if not self.boxes:
-                app.info_txt.set('No boxes to save.')
-                # print('No boxes to save.')
-                return
-
-            results_dir = 'results'
-            img_name = self.image_info['short name']
-
-            # Create the results directory if it doesn't exist.
-            Path(results_dir).mkdir(parents=True, exist_ok=True)
-
-            # Box.points are in absolute coordinates. So, need to convert pixels to
-            #  normalized coordinates (0.0 to 1.0).
-            # Write the data to a text file as yolo-obb labels and draw boxes on the image.
-            with open(f'{results_dir}/{img_name}.txt', 'w') as result_file:
-                for _box in self.boxes:
-                    if len(_box.points) == 4:
-                        obb_label = Utility.convert_to_obb_label_format(
-                            box=_box, im_size=self.image_info['h&w'])
-                        result_file.write(f'{obb_label}\n')
-
-            cv2.imwrite(f"{results_dir}/{img_name}_result.jpg", self.display_image)
-
-            app.info_txt.set(f'{len(self.boxes)} YOLO OBB labels, and the annotated image,\n'
-                             ' were saved to the results folder.')
-
-        # Need to provide a session record of save actions for the user.
-        print(f'{len(self.boxes)} YOLO OBB labels and annotated image for {img_name}'
-              f' were saved to folder "{results_dir}".')
-
 
 class YoloOBBControl(tk.Tk):
     """
@@ -1121,7 +1078,7 @@ class YoloOBBControl(tk.Tk):
         buttons_and_rows = (
             (tk.Button(text='Load new image file', command=box_drawer.open_image,
                        width=15, background=self.color['img label']), 3),
-            (tk.Button(text='Save to results', command=box_drawer.on_save,
+            (tk.Button(text='Save to results', command=self.on_save,
                        width=15, background=self.color['save button']), 5),
             (tk.Button(text='＋', command=Utility.increase_line_thickness,
                        width=1, background=self.color['increment']), 6),
@@ -1226,6 +1183,50 @@ class YoloOBBControl(tk.Tk):
             return None
 
         return labels_to_convert
+
+    def on_save(self):
+        """
+        Save to a text file boxes class index and point coordinates
+        in YOLO OBB format. Also save the drawn image as a jpeg file.
+        Files are saved to the local 'results' folder.
+        Called from the 'Save' button in config_control_window()
+        """
+        _boxes = box_drawer.boxes
+        _img_info = box_drawer.image_info
+
+        # Need to remove any non-4-point elements for an accurate box count.
+        #  This may not be necessary, but it is a good practice.
+        _boxes = [_box for _box in _boxes if len(_box.points) == 4]
+
+        if not _boxes:
+            self.info_txt.set('No boxes to save.')
+            return
+
+        results_dir = 'results'
+        img_name = _img_info['short name']
+
+        # Create the results directory if it doesn't exist.
+        Path(results_dir).mkdir(parents=True, exist_ok=True)
+
+        # Box.points are in absolute coordinates. So, need to convert pixels to
+        #  normalized coordinates (0.0 to 1.0).
+        # Write the data to a text file as yolo-obb labels and draw boxes on the image.
+        with open(f'{results_dir}/{img_name}.txt', 'w') as result_file:
+            for _box in _boxes:
+                if len(_box.points) == 4:
+                    obb_label = Utility.convert_to_obb_label_format(
+                        box=_box, im_size=_img_info['h&w'])
+                    result_file.write(f'{obb_label}\n')
+
+        cv2.imwrite(f"{results_dir}/{img_name}_result.jpg",
+                    box_drawer.display_image)
+
+        app.info_txt.set(f'{len(_boxes)} YOLO OBB labels, and the annotated image,\n'
+                         ' were saved to the results folder.')
+
+        # Need to provide a session record of save actions for the user.
+        print(f'{len(_boxes)} YOLO OBB labels and annotated image for {img_name}'
+              f' were saved to folder "{results_dir}".')
 
     def on_close(self):
         """
