@@ -24,8 +24,8 @@ with the mouse or keyboard.
 Use the YOLO OBB Control window to enter a class index for the box to
 be drawn. The default class index is 0. Enter an index value for a
 different class BEFORE creating a new box. The number entered will be
- used for subsequent boxes until changed. The class index number is
- displayed in a box's drag corner.
+used for subsequent boxes until changed. The class index number is
+displayed in a box's drag corner.
 
 Keyboard manipulation of the active box:
 The left and right arrow keys rotate the box in 3 degree increments.
@@ -47,9 +47,9 @@ The 'Help' button pops up a scrolling text usage window.
 Clicking the image window's 'X' button will not end the program, it just
 redraws the window.
 
-The terminal/console window provides feedback on save actions and errors.
-It maybe covered by the main image window that fills most of the screen,
-so, reposition windows as needed. The control window is always on top.
+The terminal/console window provides some messaging.
+It maybe covered by the main image window that fills most of the screen.
+Reposition windows as needed. The control window is always on top.
 -- END OF USAGE INFO --
 """
 
@@ -1047,7 +1047,7 @@ class YoloOBBControl(tk.Tk):
         self.info_label = tk.Label()
         self.current_image_name = tk.StringVar()  # Used to display the current image name.
         self.img_name_label = tk.Label()
-        self.line_thickness_label = tk.Label()
+        self.line_label = tk.Label()
         self.increment_label = tk.Label()
         self.increment = tk.IntVar()  # Used to set the size and rotation step factor.
 
@@ -1068,7 +1068,7 @@ class YoloOBBControl(tk.Tk):
         self.entry_label.configure(bg=self.color['dark'])
         self.info_label.config(bg=self.color['dark'], fg=self.color['dark'],)
         self.img_name_label.config(bg=self.color['dark'], fg=self.color['img label'])
-        self.line_thickness_label.config(bg=self.color['dark'], fg=self.color['increment'])
+        self.line_label.config(bg=self.color['dark'], fg=self.color['increment'])
         self.increment_label.config(bg=self.color['dark'], fg=self.color['increment'])
 
     def set_color_focusin(self):
@@ -1076,32 +1076,30 @@ class YoloOBBControl(tk.Tk):
         self.entry_label.configure(bg=self.color['window'],)
         self.info_label.config(bg=self.color['window'], fg=self.color['black'],)
         self.img_name_label.config(bg=self.color['window'], fg=self.color['save button'])
-        self.line_thickness_label.config(bg=self.color['window'], fg='black')
+        self.line_label.config(bg=self.color['window'], fg='black')
         self.increment_label.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
         self.title('YOLO OBB Control')
         self.attributes("-topmost", True)
-        window_w = 390  # Used to help center widget grid padx values.
-        self.geometry(f'{window_w}x270+100+400')  # width x height + x_offset + y_offset
-        self.resizable(width=False, height=False)
+        self.geometry('390x300+100+400')  # width x height + x_offset + y_offset
         self.config(borderwidth=6, relief='groove')
         self.protocol('WM_DELETE_WINDOW', self.on_close)
 
         self.grid_columnconfigure(0,weight=1)
-        self.grid_rowconfigure(list(range(7)), weight=1)  # Assuming 6 rows
+        self.grid_rowconfigure(list(range(9)), weight=1)  # Assuming 8 rows
 
         self.entry_label.config(text='Enter a YOLO class index number for the next box:')
         self.current_image_name.set(f'Current image: {Path(box_drawer.image_path).stem}')
         self.img_name_label.config(textvariable=self.current_image_name,)
-        self.line_thickness_label.config(text='Line thickness',)
+        self.line_label.config(text='Line thickness', )
         self.increment_label.config(text='Increment')
         self.increment.set(1)  # Default value for incrementing px size and rotation angle.
 
         # This text will be replaced with save metrics when the user saves.
-        self.info_txt.set(f"A yolo labels file in the"
-                          f" {box_drawer.labels_folder} folder\n"
-                 'can draw those boxes on its corresponding image.')
+        self.info_txt.set(
+            f"A yolo labels file in the {box_drawer.labels_folder} folder\n"
+            'can draw those boxes on its corresponding image.')
         self.info_label.config(
             textvariable=self.info_txt,
             width=65,  # character width is a function of font size and platform
@@ -1111,56 +1109,6 @@ class YoloOBBControl(tk.Tk):
         self.class_entry.config(width=3)
         self.class_entry.insert(index=tk.INSERT, string='0')  # Default value for class index.
 
-        get_image_btn = tk.Button(master=self,
-                                  text='Load new image file',
-                                  command=box_drawer.open_image,
-                                  background=self.color['img label'],
-                                  )
-        save_button = tk.Button(master=self,
-                                text='Save to results',
-                                command=box_drawer.on_save,
-                                background=self.color['save button'],
-                                )
-        increase_thickness_btn = tk.Button(
-            master=self,
-            text='＋',  # Full-width plus sign, from https://coolsymbol.com/
-            command=Utility.increase_line_thickness,
-            background=self.color['increment'],
-        )
-        decrease_thickness_btn = tk.Button(
-            master=self,
-            text='－',  # Full-width minus sign, from https://coolsymbol.com/
-            command=Utility.decrease_line_thickness,
-            background=self.color['increment'],
-        )
-        help_btn = tk.Button(
-            master=self,
-            text='Help',
-            command=Utility.show_help,
-            background=self.color['window'],
-        )
-        increment1 = tk.Radiobutton(
-            master=self,
-            text='1',
-            value=1,
-            variable=self.increment,
-            background=self.color['increment'],
-            )
-        increment2 = tk.Radiobutton(
-            master=self,
-            text='2',
-            value=2,
-            variable=self.increment,
-            background=self.color['increment'],
-        )
-        increment3 = tk.Radiobutton(
-            master=self,
-            text='3',
-            value=3,
-            variable=self.increment,
-            background=self.color['increment'],
-        )
-
         self.bind('<Escape>', lambda _: self.on_close())
         self.bind('<Control-q>', lambda _: self.on_close())
         self.bind('<FocusIn>', lambda _: self.set_color_focusin())
@@ -1168,51 +1116,47 @@ class YoloOBBControl(tk.Tk):
         self.class_entry.bind('<Return>', lambda _: self.set_class_index())
         self.class_entry.bind('<FocusOut>', lambda _: self.set_class_index())
 
-        self.entry_label.grid(
-            row=0, column=0,
-            padx=10, pady=(5, 0), sticky=tk.EW)
-        self.class_entry.grid(
-            row=1, column=0,
-            pady=5)
-        self.img_name_label.grid(
-            row=2, column=0,
-            padx=10, pady=0, sticky=tk.EW)
-        get_image_btn.grid(
-            row=3, column=0,
-            padx=10, pady=10,)
-        self.info_label.grid(
-            row=4, column=0,
-            padx=10, pady=(0, 10), sticky=tk.EW)
-        save_button.grid(
-            row=5, column=0,
-            padx=10, pady=5, sticky=tk.EW)
-
-        increase_thickness_btn.grid(
-            row=6, column=0,
-            padx=(0, 55), pady=(10,0), sticky=tk.E)
-        decrease_thickness_btn.grid(
-            row=6, column=0,
-            padx=(0, 10), pady=(10,0), sticky=tk.E)  # Right edge
-        increment1.grid(
-            row=6, column=0,
-            padx=(0, 225), pady=(10,0), sticky=tk.E)
-        increment2.grid(
-            row=6, column=0,
-            padx=(0, 175), pady=(10, 0), sticky=tk.E)
-        increment3.grid(
-            row=6, column=0,
-            padx=(0, 125), pady=(10, 0), sticky=tk.E)
-
-        help_btn.grid(
-            row=7, column=0,
-            padx=(10, 0), pady=(0, 10), sticky=tk.W)  # Left edge
-        self.line_thickness_label.grid(
-            row=7, column= 0,
-            padx=(0, 10), pady=(0, 10), sticky=tk.E)  # Below +,- buttons
-        self.increment_label.grid(
-            row=7, column=0,
-            padx=(0, window_w//2 - 30), pady=(0, 10), sticky=tk.E,  # centered
+        # Create buttons and radio buttons
+        # '\uFF0B' Full-width plus sign, '\uFF0D' Full-width minus sign.
+        buttons_and_rows = (
+            (tk.Button(text='Load new image file', command=box_drawer.open_image,
+                       width=15, background=self.color['img label']), 3),
+            (tk.Button(text='Save to results', command=box_drawer.on_save,
+                       width=15, background=self.color['save button']), 5),
+            (tk.Button(text='＋', command=Utility.increase_line_thickness,
+                       width=1, background=self.color['increment']), 6),
+            (tk.Button(text='－', command=Utility.decrease_line_thickness,
+                       width=1, background=self.color['increment']), 7),
+            (tk.Button(text='Help', command=Utility.show_help,
+                       background=self.color['window']), 8)
         )
+
+        # Create three radio buttons for incrementing px size and rotation angle.
+        radiobuttons_and_rows = [
+            (tk.Radiobutton(text=str(i), value=i, variable=self.increment,
+                            background=self.color['increment']), 6)
+            for i in range(1, 4)
+        ]
+
+        # Place widgets in the grid. (Centered is window_w//2 - 30)
+        self.entry_label.grid(row=0, column=0, padx=10, pady=(5, 0), sticky=tk.EW)
+        self.class_entry.grid(row=1, column=0, pady=5)
+        self.img_name_label.grid(row=2, column=0, padx=10, pady=0, sticky=tk.EW)
+        self.info_label.grid(row=4, column=0, padx=10, pady=(0, 10), sticky=tk.EW)
+        self.increment_label.grid(row=7, column=0, padx=(0, 165), pady=(0, 10), sticky=tk.E)
+        self.line_label.grid(row=8, column=0, padx=(0, 10), pady=(0, 10), sticky=tk.E)
+
+        for button, row in buttons_and_rows:
+            button.grid(
+                row=row, column=0, padx=30, pady=5 if row != 6 else (10, 0),
+                sticky=tk.EW if row < 6 else tk.E)
+            if row == 8:  # Help button, bottom left corner
+                button.grid_configure(padx=10, sticky=tk.W)
+
+        for i, (radiobutton, row) in enumerate(radiobuttons_and_rows):
+            radiobutton.grid(
+                row=row, column=0, padx=(0, 225 - i * 50), pady=(10, 0), sticky=tk.E)
+
 
     def set_class_index(self):
         """
