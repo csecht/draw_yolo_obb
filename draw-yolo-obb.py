@@ -980,7 +980,7 @@ class BoxDrawer:
                     org=text_orig,
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                     fontScale=self.image_info['font scale'],
-                    thickness=self.image_info['line thickness'] // 2,
+                    thickness=2,
                     color=self.cv_font_color['black'],
                     lineType=cv2.LINE_AA)
 
@@ -1116,7 +1116,7 @@ class YoloOBBControl(tk.Tk):
         self.class_entry.bind('<Return>', lambda _: self.set_class_index())
         self.class_entry.bind('<FocusOut>', lambda _: self.set_class_index())
 
-        # Create buttons and radio buttons
+        # Create buttons and radio buttons for the control window.
         # '\uFF0B' Full-width plus sign, '\uFF0D' Full-width minus sign.
         buttons_and_rows = (
             (tk.Button(text='Load new image file', command=box_drawer.open_image,
@@ -1131,7 +1131,7 @@ class YoloOBBControl(tk.Tk):
                        background=self.color['window']), 8)
         )
 
-        # Create three radio buttons for incrementing px size and rotation angle.
+        # Need three radio buttons for incrementing px size and rotation angle.
         radiobuttons_and_rows = [
             (tk.Radiobutton(text=str(i), value=i, variable=self.increment,
                             background=self.color['increment']), 6)
