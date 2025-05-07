@@ -72,6 +72,8 @@ if MY_OS == 'dar':
     print('macOS is not supported; Linux and Windows are.')
     sys.exit(1)
 
+LABELS_FOLDER = 'labels'  # Default local folder for yolo labels files.
+
 
 class Box:
     """
@@ -186,10 +188,8 @@ class BoxDrawer:
         self.image_name: str = Path(image_path).stem  # File name without extension
         self.image_info = {}  # Dictionary populated in update_image_info().
 
-        self.labels_folder = 'labels'  # Default local folder for yolo labels files.
-
         # Note that list definition here won't pick up files added during program run.
-        self.labels_files = [f.name for f in Path(self.labels_folder).glob('*.txt')]
+        self.labels_files = [f.name for f in Path(LABELS_FOLDER).glob('*.txt')]
 
         self.boxes = []  # List to store all box coordinates
         self.active_box = None  # Currently active box
@@ -283,7 +283,7 @@ class BoxDrawer:
         """
 
         # Ensure the labels folder exists.
-        Path(self.labels_folder).mkdir(parents=True, exist_ok=True)
+        Path(LABELS_FOLDER).mkdir(parents=True, exist_ok=True)
 
         labels_file = Path(img_path).stem + '.txt'
         with self.control_lock:
@@ -292,11 +292,11 @@ class BoxDrawer:
                     parent=app,
                     title='Convert label data?',
                     detail=f'The image "{Path(img_path).name}"'
-                           f' has a labels file in {self.labels_folder}.\n'
+                           f' has a labels file in {LABELS_FOLDER}.\n'
                            f'"Yes" draws those boxes on the image.\n')
                 if convert_now:
                     # Load the existing label data and draw boxes on the image.
-                    labels_path = f'{self.labels_folder}/{labels_file}'
+                    labels_path = f'{LABELS_FOLDER}/{labels_file}'
                     try:
                         labels_to_view = app.get_labels(labels_path=labels_path)
                         if labels_to_view:
@@ -404,8 +404,8 @@ class BoxDrawer:
             # Using a copy allows live drawing of boxes.
             self.display_image = self.image_info['copy'].copy()
 
+            # Zooms window the up/down arrow keys on Windows.
             if MY_OS == 'win' and self.zoom_level != 1.0 and self.zoom_center:
-                # Zooms window the up/down arrow keys on Windows.
                 _h, _w = self.display_image.shape[:2]
                 img_h, img_w = self.image_info['h&w']
                 scale = self.zoom_level
@@ -480,7 +480,7 @@ class BoxDrawer:
             cv2.imshow(self.window_name, self.display_image)
             self.handle_keys()
 
-        # stop_loop is set, so close the window and prepare to exit.
+        # stop_loop has been set, so close the window and prepare to exit.
         cv2.destroyWindow(self.window_name)
 
     def handle_keys(self) -> None:
@@ -488,32 +488,17 @@ class BoxDrawer:
             Define all the key events for manipulating boxes in the CV window.
             Called from draw_box_frame().
             """
-            # Get arrow key press
-            if MY_OS == 'win':
-                key = cv2.waitKeyEx(1)
-                self.arrow_keys = {
-                    'left': 2424832,   # VK_LEFT, 0x25
-                    'up': 2490368,     # VK_UP, 0x26
-                    'right': 2555904,  # VK_RIGHT, 0x27
-                    'down': 2621440    # VK_DOWN, 0x28
-                }
-            elif MY_OS == 'lin':  # linux or darwin
-                key = cv2.waitKey(1)  # restricts keycodes to 0-255
-                self.arrow_keys = {
-                    'left': 81,
-                    'up': 82,
-                    'right': 83,
-                    'down': 84,
-                }
-            else:  # is macOS, MacBookPro M3
-                # NOTE: key action is intermittent on macOS. Key codes are valid.
-                key = cv2.waitKeyEx(1)
-                self.arrow_keys = {
-                    'up': 63232,  # (0xf700, LSB: 0 ('\x00'),
-                    'down': 63233,  # (0xf701, LSB: 1 ('\x01'),
-                    'left': 63234,  # (0xf702, LSB: 2 ('\x02')
-                    'right': 63235,  # (0xf703, LSB: 3 ('\x03')
-                }
+
+            # Get arrow key press and define key mappings for Windows and Linux.
+            # NOTE: key actions are intermittent on macOS (darwin) platform, but
+            #  are included for possible future macOS implementation.
+            key = cv2.waitKeyEx(1) if MY_OS in ('win', 'dar') else cv2.waitKey(1)
+            self.arrow_keys = {
+                'left': 2424832 if MY_OS == 'win' else 63234 if MY_OS == 'dar' else 81,
+                'up': 2490368 if MY_OS == 'win' else 63232 if MY_OS == 'dar' else 82,
+                'right': 2555904 if MY_OS == 'win' else 63235 if MY_OS == 'dar' else 83,
+                'down': 2621440 if MY_OS == 'win' else 63233 if MY_OS == 'dar' else 84,
+            }
 
             # Early return if no key pressed or key not in our handlers.
             if key == -1:
@@ -1069,7 +1054,7 @@ class YoloOBBControl(tk.Tk):
 
         # This text will be replaced with save metrics when the user saves.
         self.info_txt.set(
-            f"A yolo labels file in the {box_drawer.labels_folder} folder\n"
+            f"A YOLO labels file in the {LABELS_FOLDER} folder\n"
             'can draw those boxes on its corresponding image.')
         self.info_label.config(
             textvariable=self.info_txt,
