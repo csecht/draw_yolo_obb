@@ -454,16 +454,28 @@ class BoxDrawer:
 
                     # Draw a circle in the bottom-right corner of the active box.
                     # Make radius size relative to image size.
-                    cv2.circle(self.display_image,
-                               center=pts[2],
-                               radius=self.get_circle_radius(),
-                               color=self.cv_color['cyan' if _box.is_active else 'white'],
-                               thickness=cv2.FILLED)
+                    if app.show_class_index.get():
+                        cv2.circle(self.display_image,
+                                   center=pts[2],
+                                   radius=self.get_circle_radius(),
+                                   color=self.cv_color['white'],
+                                   thickness=cv2.FILLED)
 
-                    self.put_text_class_index(image=self.display_image,
-                                              class_idx=str(_box.class_index),
-                                              box_points=pts,
-                                              )
+                        self.put_text_class_index(image=self.display_image,
+                                                  class_idx=str(_box.class_index),
+                                                  box_points=pts,)
+                    if _box.is_active:
+                        # Draw a circle in the bottom-right corner of the active box.
+                        # Make radius size relative to image size.
+                        cv2.circle(self.display_image,
+                                   center=pts[2],
+                                   radius=self.get_circle_radius(),
+                                   color=self.cv_color['cyan'],
+                                   thickness=cv2.FILLED)
+                        self.put_text_class_index(image=self.display_image,
+                                                  class_idx=str(_box.class_index),
+                                                  box_points=pts,)
+
 
             cv2.imshow(self.window_name, self.display_image)
             self.handle_keys()
@@ -1005,6 +1017,8 @@ class YoloOBBControl(tk.Tk):
         self.line_label = tk.Label()
         self.increment_label = tk.Label()
         self.increment = tk.IntVar()  # Used to set the size and rotation step factor.
+        self.show_class_index = tk.IntVar()  # Used a 0, 1 toggle for Checkbutton.
+        self.class_index_toggle = tk.Checkbutton()
 
         # Want the 'Get new image' button bg to match the image name label fg
         #  when focusOut. When focusIn, image name label fg uses a better contrast.
@@ -1025,6 +1039,7 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['dark'], fg=self.color['img label'])
         self.line_label.config(bg=self.color['dark'], fg=self.color['increment'])
         self.increment_label.config(bg=self.color['dark'], fg=self.color['increment'])
+        self.class_index_toggle.config(bg=self.color['dark'], fg=self.color['increment'])
 
     def set_color_focusin(self):
         self.config(bg=self.color['window'],)
@@ -1033,6 +1048,7 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['window'], fg=self.color['save button'])
         self.line_label.config(bg=self.color['window'], fg='black')
         self.increment_label.config(bg=self.color['window'], fg='black')
+        self.class_index_toggle.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
         self.title('YOLO OBB Control')
@@ -1063,6 +1079,11 @@ class YoloOBBControl(tk.Tk):
 
         self.class_entry.config(width=3)
         self.class_entry.insert(index=tk.INSERT, string='0')  # Default value for class index.
+        self.class_index_toggle.configure(
+            text="Show class index",
+            variable=self.show_class_index,
+            highlightthickness=0,  # No border around the checkbutton
+        )
 
         self.bind('<Escape>', lambda _: self.on_close())
         self.bind('<Control-q>', lambda _: self.on_close())
@@ -1083,7 +1104,7 @@ class YoloOBBControl(tk.Tk):
             (tk.Button(text='－', command=Utility.decrease_line_thickness,
                        width=1, background=self.color['increment']), 7),
             (tk.Button(text='Help', command=Utility.show_help,
-                       background=self.color['window']), 8)
+                       background=self.color['window']), 8),
         )
 
         # Need three radio buttons for incrementing px size and rotation angle.
@@ -1093,13 +1114,18 @@ class YoloOBBControl(tk.Tk):
             for i in range(1, 4)
         ]
 
-        # Place widgets in the grid. (Centered is window_w//2 - 30)
+        # Place widgets in the grid. (Centered is window_w//2 - text_w//2)
         self.entry_label.grid(row=0, column=0, padx=10, pady=(5, 0), sticky=tk.EW)
         self.class_entry.grid(row=1, column=0, pady=5)
         self.img_name_label.grid(row=2, column=0, padx=10, pady=0, sticky=tk.EW)
         self.info_label.grid(row=4, column=0, padx=10, pady=(0, 10), sticky=tk.EW)
-        self.increment_label.grid(row=7, column=0, padx=(0, 165), pady=(0, 10), sticky=tk.E)
+        self.increment_label.grid(row=7, column=0,
+                                  padx=(0, 165), # centered
+                                  pady=(0, 10), sticky=tk.E)
         self.line_label.grid(row=8, column=0, padx=(0, 10), pady=(0, 10), sticky=tk.E)
+        self.class_index_toggle.grid(row=8, column=0,
+                                padx=(0, 135),  # centered
+                                pady=(0, 10), sticky=tk.E)
 
         for button, row in buttons_and_rows:
             button.grid(
