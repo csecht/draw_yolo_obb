@@ -418,7 +418,7 @@ class BoxDrawer:
                 t_matrix = np.array([
                     [scale, 0, (1 - scale) * mouse_x],
                     [0, scale, (1 - scale) * mouse_y]
-                ])  #, dtype=np.float32)
+                ])
 
                 # Apply transformation
                 self.display_image = cv2.warpAffine(
@@ -454,27 +454,17 @@ class BoxDrawer:
 
                     # Draw a circle in the bottom-right corner of the active box.
                     # Make radius size relative to image size.
-                    if app.show_class_index.get():
-                        cv2.circle(self.display_image,
-                                   center=pts[2],
-                                   radius=self.get_circle_radius(),
-                                   color=self.cv_color['white'],
-                                   thickness=cv2.FILLED)
+                    cv2.circle(
+                        self.display_image,
+                        center=pts[2],
+                        radius=self.get_circle_radius(),
+                        color=self.cv_color['cyan'] if _box.is_active else self.cv_color['white'],
+                        thickness=cv2.FILLED,
+                    )
 
-                        self.put_text_class_index(image=self.display_image,
-                                                  class_idx=str(_box.class_index),
-                                                  box_points=pts,)
-                    if _box.is_active:
-                        # Draw a circle in the bottom-right corner of the active box.
-                        # Make radius size relative to image size.
-                        cv2.circle(self.display_image,
-                                   center=pts[2],
-                                   radius=self.get_circle_radius(),
-                                   color=self.cv_color['cyan'],
-                                   thickness=cv2.FILLED)
-                        self.put_text_class_index(image=self.display_image,
-                                                  class_idx=str(_box.class_index),
-                                                  box_points=pts,)
+                    self.put_text_class_index(image=self.display_image,
+                                              class_idx=str(_box.class_index),
+                                              box_points=pts,)
 
 
             cv2.imshow(self.window_name, self.display_image)
@@ -1002,8 +992,8 @@ class YoloOBBControl(tk.Tk):
         self.line_label = tk.Label()
         self.increment_label = tk.Label()
         self.increment = tk.IntVar()  # Used to set the size and rotation step factor.
-        self.show_class_index = tk.IntVar()  # Used a 0, 1 toggle for Checkbutton.
-        self.class_index_toggle = tk.Checkbutton()
+        self.show_class_index = tk.BooleanVar()  # Used a 0, 1 toggle for Checkbutton.
+        # self.class_index_toggle = tk.Checkbutton()
 
         # Want the 'Get new image' button bg to match the image name label fg
         #  when focusOut. When focusIn, image name label fg uses a better contrast.
@@ -1024,7 +1014,7 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['dark'], fg=self.color['img label'])
         self.line_label.config(bg=self.color['dark'], fg=self.color['increment'])
         self.increment_label.config(bg=self.color['dark'], fg=self.color['increment'])
-        self.class_index_toggle.config(bg=self.color['dark'], fg=self.color['increment'])
+        # self.class_index_toggle.config(bg=self.color['dark'], fg=self.color['increment'])
 
     def set_color_focusin(self):
         self.config(bg=self.color['window'],)
@@ -1033,7 +1023,7 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['window'], fg=self.color['save button'])
         self.line_label.config(bg=self.color['window'], fg='black')
         self.increment_label.config(bg=self.color['window'], fg='black')
-        self.class_index_toggle.config(bg=self.color['window'], fg='black')
+        # self.class_index_toggle.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
         self.title('YOLO OBB Control')
@@ -1064,11 +1054,11 @@ class YoloOBBControl(tk.Tk):
 
         self.class_entry.config(width=3)
         self.class_entry.insert(index=tk.INSERT, string='0')  # Default value for class index.
-        self.class_index_toggle.configure(
-            text="Show class index",
-            variable=self.show_class_index,
-            highlightthickness=0,  # No border around the checkbutton
-        )
+        # self.class_index_toggle.configure(
+        #     text="Show class index",
+        #     variable=self.show_class_index,
+        #     highlightthickness=0,  # No border around the checkbutton
+        # )
 
         self.bind('<Escape>', lambda _: self.on_close())
         self.bind('<Control-q>', lambda _: self.on_close())
@@ -1108,9 +1098,9 @@ class YoloOBBControl(tk.Tk):
                                   padx=(0, 165), # centered
                                   pady=(0, 10), sticky=tk.E)
         self.line_label.grid(row=8, column=0, padx=(0, 10), pady=(0, 10), sticky=tk.E)
-        self.class_index_toggle.grid(row=8, column=0,
-                                padx=(0, 135),  # centered
-                                pady=(0, 10), sticky=tk.E)
+        # self.class_index_toggle.grid(row=8, column=0,
+        #                         padx=(0, 135),  # centered
+        #                         pady=(0, 10), sticky=tk.E)
 
         for button, row in buttons_and_rows:
             button.grid(
