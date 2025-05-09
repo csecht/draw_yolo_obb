@@ -33,6 +33,7 @@ The up and down arrow keys increase or decrease the box size in Linux.
 The 'i', 'k', 'j', and 'l' keys move the box up, down, left, and right.
 The 'e', 'd', 'f', and 's' keys increase or decrease height and width.
 The 'r' key removes the active (red) box.
+The 't' key toggles the display of the class index corner circle.
 
 Program control keys:
 The up and down arrow keys zoom the image in and out in Windows.
@@ -200,6 +201,7 @@ class BoxDrawer:
         self.offset = (0, 0)  # Offset for dragging the entire box
         self.b_box_counter = 0  # Counter for 'b' key presses
         self.current_class_index = 0
+        self.show_corner_circle = True
 
         # Minimum dimension pixel size to prevent disappearing, too small,
         #  and out-of-bounds objects,
@@ -386,7 +388,7 @@ class BoxDrawer:
         #  WINDOWS_NORMAL runs a Qt thread that expects to be the main loop.
         #  The program runs fine with WINDOWS_NORMAL, but throws a Qt timer
         #  error when closed from app.on_close().
-        self.window_name = "View and Edit OBB ('h' for help)"
+        self.window_name = "View and Edit OBB"
         cv2.namedWindow(self.window_name,cv2.WINDOW_GUI_NORMAL,)
         cv2.resizeWindow(
             self.window_name,
@@ -452,15 +454,18 @@ class BoxDrawer:
                                   thickness=self.image_info['line thickness'],
                                   )
 
-                    # Draw a circle in the bottom-right corner of the active box.
+                    # Only draw circle in the bottom-right corner if
+                    #  show_corner_circle is True. Always show the class index.
+                    # Use different colors for active vs. inactive boxes.
                     # Make radius size relative to image size.
-                    cv2.circle(
+                    if self.show_corner_circle:
+                        cv2.circle(
                         self.display_image,
-                        center=pts[2],
-                        radius=self.get_circle_radius(),
-                        color=self.cv_color['cyan'] if _box.is_active else self.cv_color['white'],
-                        thickness=cv2.FILLED,
-                    )
+                            center=pts[2],
+                            radius=self.get_circle_radius(),
+                            color=self.cv_color['cyan'] if _box.is_active else self.cv_color['white'],
+                            thickness=cv2.FILLED,
+                        )
 
                     self.put_text_class_index(image=self.display_image,
                                               class_idx=str(_box.class_index),
@@ -520,11 +525,18 @@ class BoxDrawer:
                 ord("d"): lambda: self._handle_resize_height(delta=-incr),
                 ord("f"): lambda: self._handle_resize_width(delta=incr),
                 ord("s"): lambda: self._handle_resize_width(delta=-incr),
+                # Toggle show/hide class_index
+                ord("t"): lambda: self._handle_circle_toggle(),
             }
 
             # Handle the key using the dispatch dictionary.
             if key in key_handlers:
                 key_handlers[key]()
+
+    def _handle_circle_toggle(self):
+        """Toggle display of drag corner circle with the 't' key;
+        for visual contrast of the class index text."""
+        self.show_corner_circle = not self.show_corner_circle
 
     def _handle_new_box(self):
         """Handle creating a new box with the 'b' key."""
@@ -992,8 +1004,6 @@ class YoloOBBControl(tk.Tk):
         self.line_label = tk.Label()
         self.increment_label = tk.Label()
         self.increment = tk.IntVar()  # Used to set the size and rotation step factor.
-        self.show_class_index = tk.BooleanVar()  # Used a 0, 1 toggle for Checkbutton.
-        # self.class_index_toggle = tk.Checkbutton()
 
         # Want the 'Get new image' button bg to match the image name label fg
         #  when focusOut. When focusIn, image name label fg uses a better contrast.
@@ -1014,7 +1024,6 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['dark'], fg=self.color['img label'])
         self.line_label.config(bg=self.color['dark'], fg=self.color['increment'])
         self.increment_label.config(bg=self.color['dark'], fg=self.color['increment'])
-        # self.class_index_toggle.config(bg=self.color['dark'], fg=self.color['increment'])
 
     def set_color_focusin(self):
         self.config(bg=self.color['window'],)
@@ -1023,7 +1032,6 @@ class YoloOBBControl(tk.Tk):
         self.img_name_label.config(bg=self.color['window'], fg=self.color['save button'])
         self.line_label.config(bg=self.color['window'], fg='black')
         self.increment_label.config(bg=self.color['window'], fg='black')
-        # self.class_index_toggle.config(bg=self.color['window'], fg='black')
 
     def config_control_window(self):
         self.title('YOLO OBB Control')
@@ -1054,11 +1062,6 @@ class YoloOBBControl(tk.Tk):
 
         self.class_entry.config(width=3)
         self.class_entry.insert(index=tk.INSERT, string='0')  # Default value for class index.
-        # self.class_index_toggle.configure(
-        #     text="Show class index",
-        #     variable=self.show_class_index,
-        #     highlightthickness=0,  # No border around the checkbutton
-        # )
 
         self.bind('<Escape>', lambda _: self.on_close())
         self.bind('<Control-q>', lambda _: self.on_close())
