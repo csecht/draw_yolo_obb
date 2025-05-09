@@ -94,6 +94,7 @@ be drawn. The default class index is 0. Enter an index value for a different cla
 * 'i', 'k', 'j', and 'l' keys move the box up, down, left, and right.
 * 'e', 'd', 'f', and 's' keys increase or decrease height and width.
 * 'r' key removes the active box.
+* The 't' key toggles the display of the class index corner circle.
 
 Key assignments are based on the QWERTY keyboard layout. The rationale is that keys' relative positions infer their action, similar to the spatial layout of the arrow keys cluster.
 
