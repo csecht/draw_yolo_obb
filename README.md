@@ -94,7 +94,7 @@ be drawn. The default class index is 0. Enter an index value for a different cla
 * 'i', 'k', 'j', and 'l' keys move the box up, down, left, and right.
 * 'e', 'd', 'f', and 's' keys increase or decrease height and width.
 * 'r' key removes the active box.
-* The 't' key toggles the display of the class index corner circle.
+* 't' key toggles the display of the class index corner circle.
 
 Key assignments are based on the QWERTY keyboard layout. The rationale is that keys' relative positions infer their action, similar to the spatial layout of the arrow keys cluster.
 
@@ -123,7 +123,7 @@ The saved annotated image with 47 boxes.
 * Box manipulations are center-oriented, so when initially positioning a box, roughly center it on the object, then adjust rotation, size, and dimensions.
 * When needing a box for a different object class, remember to change the class index in the YOLO OBB Control window before drawing the box.
 * The class index cannot be changed for an existing box. If a box is misclassified, delete it and draw a new box with the correct class index.
-* The OpenCV window manager in Linux (Ubuntu) allow you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. In many Windows systems, the mouse wheel doesn't zoom the image. Zoom functions, however, can be achieved with the up and down arrow keys. 
+* The OpenCV window manager in Linux (Ubuntu) allows you to zoom in and out with the mouse wheel, and to pan the zoomed image with the mouse. When zoomed in, however, box drag actions don't work, so use the keyboard to manipulate boxes. In many Windows systems, the mouse wheel doesn't zoom the image. Zoom functions, however, can be achieved with the up and down arrow keys. 
 * No part of a box can be moved outside the image boundary. Saved label coordinates will always be bound by 0 and 1.
 * Box lines may be thicker than specified, because that's how OpenCV works. Regardless, box borders will always be line-centered. So, when needing to precisely frame a box to an object, keep in mind that the interior half of a line will be inside the actual box dimensions and may thus overlap the object area.
 * The terminal window provides feedback on save actions and errors. It may

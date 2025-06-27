@@ -43,7 +43,7 @@ The mouse wheel zooms in and out in Linux.
 The 'Esc' key quits program from the control window.
 Control-q quits the program from the control window.
 The 'X' button in the control window bar quits the program.
-The 'Help' button pops up a scrolling text usage window.
+The 'Help' button pops up a window of usage information (this docstring).
 
 Clicking the image window's 'X' button will not end the program, it just
 redraws the window.
@@ -74,6 +74,7 @@ if MY_OS == 'dar':
     sys.exit(1)
 
 LABELS_FOLDER = 'labels'  # Default local folder for yolo labels files.
+RESULTS_DIR = 'results'
 
 
 class Box:
@@ -323,7 +324,7 @@ class BoxDrawer:
         #  and comfortably scale-to-fit the largest image dimension.
         win_h = app.winfo_screenheight() * 0.85
         win_w = app.winfo_screenwidth() * 0.85
-        display_factor = max(img_h / win_h, img_w / win_w) if img_h > win_h or img_w > win_w else 1
+        display_factor = max(img_h / win_h, img_w / win_w, 1)
 
         # Ideas for scaling: https://stackoverflow.com/questions/52846474/
         #   how-to-resize-text-for-cv2-puttext-according-to-the-image-object_size-in-opencv-python
@@ -400,7 +401,7 @@ class BoxDrawer:
 
         # BOX DRAWING and KEYBOARD ACTION LOOP
         # The loop provides live drawing updates as long as the threading.Event
-        #  is not set. Event is set upon call to on_close().
+        #  is not set. Event is set upon call to app.on_close().
         while not self.stop_loop.is_set():
 
             # Using a copy allows live drawing of boxes.
@@ -470,7 +471,6 @@ class BoxDrawer:
                     self.put_text_class_index(image=self.display_image,
                                               class_idx=str(_box.class_index),
                                               box_points=pts,)
-
 
             cv2.imshow(self.window_name, self.display_image)
             self.handle_keys()
@@ -1101,9 +1101,6 @@ class YoloOBBControl(tk.Tk):
                                   padx=(0, 165), # centered
                                   pady=(0, 10), sticky=tk.E)
         self.line_label.grid(row=8, column=0, padx=(0, 10), pady=(0, 10), sticky=tk.E)
-        # self.class_index_toggle.grid(row=8, column=0,
-        #                         padx=(0, 135),  # centered
-        #                         pady=(0, 10), sticky=tk.E)
 
         for button, row in buttons_and_rows:
             button.grid(
@@ -1124,11 +1121,10 @@ class YoloOBBControl(tk.Tk):
         Called from class_entry.bind() methods.
         """
 
-        # Force positive integer class index when loose focus, for when
-        #  negative values and letters may be showing in the focused Entry field.
+        # Replace display of invalid class index in Entry field when
+        #  Control window looses focus.
         try:
-            class_index = abs(int(self.class_entry.get()))
-            box_drawer.current_class_index = class_index
+            box_drawer.current_class_index = abs(int(self.class_entry.get()))
         except ValueError:
             messagebox.showerror(title='Invalid class index',
                                  detail='Please enter an integer value.')
@@ -1204,23 +1200,22 @@ class YoloOBBControl(tk.Tk):
             self.info_txt.set('No boxes to save.')
             return
 
-        results_dir = 'results'
         img_name = _img_info['short name']
 
         # Create the results directory if it doesn't exist.
-        Path(results_dir).mkdir(parents=True, exist_ok=True)
+        Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
         # Box.points are in absolute coordinates. So, need to convert pixels to
         #  normalized coordinates (0.0 to 1.0).
         # Write the data to a text file as yolo-obb labels and draw boxes on the image.
-        with open(f'{results_dir}/{img_name}.txt', 'w') as result_file:
+        with open(f'{RESULTS_DIR}/{img_name}.txt', 'w') as result_file:
             for _box in _boxes:
                 if len(_box.points) == 4:
                     obb_label = Utility.convert_to_obb_label_format(
                         box=_box, im_size=_img_info['h&w'])
                     result_file.write(f'{obb_label}\n')
 
-        cv2.imwrite(f"{results_dir}/{img_name}_result.jpg",
+        cv2.imwrite(f"{RESULTS_DIR}/{img_name}_result.jpg",
                     box_drawer.display_image)
 
         app.info_txt.set(f'{len(_boxes)} YOLO OBB labels, and the annotated image,\n'
@@ -1228,7 +1223,7 @@ class YoloOBBControl(tk.Tk):
 
         # Need to provide a session record of save actions for the user.
         print(f'{len(_boxes)} YOLO OBB labels and annotated image for {img_name}'
-              f' were saved to folder "{results_dir}".')
+              f' were saved to folder "{RESULTS_DIR}".')
 
     def on_close(self):
         """
